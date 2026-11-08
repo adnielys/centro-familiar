@@ -105,12 +105,19 @@ main { max-width: 980px; margin: 0 auto; padding: 16px max(16px, env(safe-area-i
 /* ---------- Formularios ---------- */
 form { display: grid; gap: 10px; }
 .row { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); }
-label { display: grid; gap: 4px; font-size: 13px; color: var(--muted); }
+label { display: grid; gap: 4px; font-size: 13px; color: var(--muted); min-width: 0; }
 label.check { display: flex; align-items: flex-start; gap: 8px; color: var(--ink); font-size: 14px; }
 input, select, textarea {
   background: var(--bg); border: 1px solid var(--line); border-radius: 9px; padding: 10px; min-width: 0; width: 100%;
   font-size: 16px; /* evita el zoom automático de iOS */
+  min-height: 46px; line-height: 1.25;
 }
+/* iOS Safari: los campos de fecha/hora ignoran el ancho, cambian de alto si están vacíos y centran el texto. */
+input[type="date"], input[type="time"], input[type="month"] {
+  -webkit-appearance: none; appearance: none;
+  display: block; max-width: 100%; text-align: left;
+}
+input::-webkit-date-and-time-value { text-align: left; min-height: 1.25em; }
 input[type="checkbox"] { width: 20px; height: 20px; accent-color: var(--accent); margin: 1px 0 0; flex: none; }
 .btn { background: var(--accent); color: var(--accent-ink); border: 0; border-radius: 10px; padding: 11px 16px; font-weight: 600; cursor: pointer; }
 .btn.ghost { background: transparent; color: var(--accent); border: 1px solid var(--line); }
