@@ -1,0 +1,102 @@
+/**
+ * Punto de entrada: carga datos locales, monta las vistas y registra acciones globales
+ * (borrado en dos toques, marcar como hecho, agendar una tarea).
+ */
+import "./styles.css";
+import { registerSW } from "virtual:pwa-register";
+import { fmtLongDate, todayISO } from "./domain/dates";
+import type { CollectionName } from "./domain/types";
+import { COLLECTION_NAMES } from "./domain/types";
+import { store } from "./data/store";
+import { attempt, qs, toast } from "./ui/dom";
+import { startRouter } from "./ui/router";
+import { agendaView, agendarTarea } from "./ui/views/agenda";
+import { ajustesView } from "./ui/views/ajustes";
+import { gastosView } from "./ui/views/gastos";
+import { hijosView } from "./ui/views/hijos";
+import { hoyView } from "./ui/views/hoy";
+import { registrarView } from "./ui/views/registrar";
+import { tareasView } from "./ui/views/tareas";
+
+const isCollection = (x: string | undefined): x is CollectionName => COLLECTION_NAMES.includes(x as CollectionName);
+
+/** Borrado en dos toques: el primero arma el botón, el segundo confirma. */
+function bindDelete(): void {
+  document.addEventListener("click", (e) => {
+    const btn = (e.target as HTMLElement).closest<HTMLButtonElement>("[data-del]");
+    if (!btn) return;
+    const col = btn.dataset.del;
+    const id = btn.dataset.id;
+    if (!isCollection(col) || !id) return;
+    if (!btn.dataset.armed) {
+      btn.dataset.armed = "1";
+      btn.dataset.label = btn.textContent ?? "";
+      btn.textContent = "¿Seguro?";
+      setTimeout(() => {
+        if (!btn.isConnected) return;
+        delete btn.dataset.armed;
+        btn.textContent = btn.dataset.label ?? "Borrar";
+      }, 3000);
+      return;
+    }
+    void attempt(() => store.remove(col, id), "Eliminado");
+  });
+}
+
+/** Casillas de "hecho" en tareas y deberes. */
+function bindToggle(): void {
+  document.addEventListener("change", (e) => {
+    const el = e.target as HTMLInputElement;
+    const col = el.dataset?.toggle;
+    const id = el.dataset?.id;
+    if ((col !== "tareas" && col !== "deberes") || !id) return;
+    const hecha = el.checked;
+    void attempt(() =>
+      col === "tareas"
+        ? store.update("tareas", id, { estado: hecha ? "hecha" : "pendiente", completada: hecha ? new Date().toISOString() : null })
+        : store.update("deberes", id, { estado: hecha ? "hecha" : "pendiente" }),
+    );
+  });
+}
+
+function bindAgendar(): void {
+  document.addEventListener("click", (e) => {
+    const btn = (e.target as HTMLElement).closest<HTMLElement>("[data-agendar]");
+    const tarea = btn ? store.byId("tareas", btn.dataset.agendar) : undefined;
+    if (tarea) agendarTarea(tarea);
+  });
+}
+
+async function main(): Promise<void> {
+  qs("#todayLabel").textContent = fmtLongDate(todayISO());
+  try {
+    await store.init();
+  } catch (e) {
+    console.error(e);
+    qs("#appMain").innerHTML = `<div class="card"><h2>No se pudo abrir el almacenamiento</h2><p>Este navegador no permite guardar datos (¿modo privado?). Ábrela en una ventana normal.</p></div>`;
+    return;
+  }
+  bindDelete();
+  bindToggle();
+  bindAgendar();
+  startRouter([hoyView, agendaView, registrarView, tareasView, gastosView, hijosView, ajustesView], qs("#nav"), qs("#appMain"));
+
+  // Pide almacenamiento persistente para que el sistema no borre los datos por falta de espacio.
+  void navigator.storage?.persist?.();
+
+  registerSW({
+    onOfflineReady: () => toast("Lista para usarse sin conexión"),
+  });
+
+  // A medianoche (o al volver a la app otro día) refresca "hoy".
+  let dia = todayISO();
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible" && todayISO() !== dia) {
+      dia = todayISO();
+      qs("#todayLabel").textContent = fmtLongDate(dia);
+      window.dispatchEvent(new HashChangeEvent("hashchange"));
+    }
+  });
+}
+
+void main();

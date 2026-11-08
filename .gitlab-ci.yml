@@ -1,0 +1,26 @@
+# Publica la app en GitLab Pages en cada push a la rama por defecto.
+image: node:20
+
+cache:
+  key:
+    files: [package-lock.json]
+  paths: [.npm/]
+
+test:
+  stage: test
+  script:
+    - npm ci --cache .npm --prefer-offline
+    - npm test
+    - npm run typecheck
+
+pages:
+  stage: deploy
+  script:
+    - npm ci --cache .npm --prefer-offline
+    - npm run build
+    # GitLab Pages publica la carpeta "public"; la de Vite (assets fuente) se sustituye por el build.
+    - rm -rf public && mv dist public
+  artifacts:
+    paths: [public]
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
