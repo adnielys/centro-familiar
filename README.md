@@ -55,8 +55,8 @@ Para probar en el móvil durante el desarrollo: `npm run dev -- --host` y abre l
 
 ### Opción A: GitHub Pages
 1. Crea un repositorio y sube el proyecto a la rama `main`.
-2. En el repo: **Settings → Pages → Source: GitHub Actions**.
-3. Cada push ejecuta tests y build y publica en `https://<usuario>.github.io/<repo>/`.
+2. Cada push a `main` ejecuta tests y build y publica `dist/` en la rama `gh-pages`.
+3. La app queda en `https://<usuario>.github.io/<repo>/` (si no se activa sola: **Settings → Pages → Branch: gh-pages / root**).
 
 ### Opción B: GitLab Pages
 1. Sube el proyecto a GitLab (rama por defecto).
