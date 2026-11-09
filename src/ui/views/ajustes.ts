@@ -41,7 +41,7 @@ export const ajustesView: View = {
       <div class="card" id="avisosCard" ${avisosDisponibles() ? "" : "hidden"}>
         <h2>Avisos</h2>
         <form id="formAvisos" autocomplete="off">
-          <p class="small muted">El iPhone te avisa el día que vence una tarea con fecha o un gasto fijo, aunque la app esté cerrada.</p>
+          <p class="small muted">El teléfono te avisa el día que vence una tarea con fecha o un gasto fijo, aunque la app esté cerrada.</p>
           <label class="check" for="avActivo"><input type="checkbox" id="avActivo" name="avActivo"> Recibir avisos</label>
           <label for="avHora">Hora del aviso <input id="avHora" name="avHora" type="time" required></label>
           <button class="btn" type="submit">Guardar avisos</button>
@@ -130,7 +130,7 @@ export const ajustesView: View = {
       const hora = formValues(form).avHora;
       void attempt(async () => {
         if (activo && !(await pedirPermisoAvisos())) {
-          throw new Error("Permiso denegado. Actívalo en Ajustes del iPhone → Centro Familiar → Notificaciones.");
+          throw new Error("Permiso denegado. Actívalo en los ajustes del teléfono → Apps → Familia → Notificaciones.");
         }
         await store.saveConfig({ avisos: { activo, hora } });
         const n = await sincronizarAvisos();

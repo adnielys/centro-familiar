@@ -33,6 +33,7 @@ src/
     notificaciones.ts Avisos locales programados (solo app nativa)
   ui/            Vistas (mount una vez + update en cada cambio), router por hash, utilidades
 ios/             Proyecto Xcode generado por Capacitor (Swift Package Manager)
+android/         Proyecto Gradle generado por Capacitor
 tests/           Vitest: todo el dominio
 ```
 
@@ -139,8 +140,20 @@ npm run build && npx cap sync ios   # copia dist/ al proyecto iOS
 ```
 `ios/App/App/public` y `capacitor.config.json` se generan en cada `sync` (no se versionan). Icono: `ios/App/App/Assets.xcassets/AppIcon.appiconset` (1024×1024, sin transparencia).
 
+## App Android
+
+Mismo empaquetado con Capacitor en `android/` (avisos locales y elTOQUE nativo igual que en iOS).
+
+Cada push a `main` lanza el workflow **Android** (`.github/workflows/android.yml`) y deja el artefacto **`CentroFamiliar-apk`**:
+1. En el teléfono Android abre GitHub → Actions → la última ejecución de *Android* → *Artifacts* → `CentroFamiliar-apk` (descarga un .zip con `CentroFamiliar.apk`).
+2. Ábrelo y permite «Instalar apps desconocidas» para el navegador o el gestor de archivos cuando lo pida.
+3. Las siguientes versiones instalan **encima** sin perder datos: todas van firmadas con la misma clave (`android/app/debug.keystore`, clave de depuración versionada a propósito; no sirve para Google Play).
+
+**Google Play (opcional):** crea una clave de publicación (`keytool -genkeypair -v -keystore release.jks -alias centrofamiliar -keyalg RSA -keysize 2048 -validity 10000`) y guarda en los secretos del repo `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS` y `ANDROID_KEY_PASSWORD`. El workflow generará también el `.aab` firmado.
+
+Desarrollo local: `npm run build && npx cap sync android && npx cap open android` (Android Studio) o `cd android && ./gradlew assembleDebug`. Requisitos: JDK 21 y Android SDK 36.
+
 ## Hoja de ruta
 
 1. **Sincronización entre dispositivos**: backend NestJS + PostgreSQL (Docker) con API REST; el `store` ya centraliza las escrituras, así que se añade un adaptador de sincronización sin tocar las vistas. Permitiría también refresh tokens de Google y que agentes externos lean los datos.
-2. **Android nativo**: `npx cap add android` + workflow que genere un APK instalable directamente.
-3. Avisos en la versión web (Web Push; requiere servidor).
+2. Avisos en la versión web (Web Push; requiere servidor).

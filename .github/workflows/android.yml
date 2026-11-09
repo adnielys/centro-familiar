@@ -1,0 +1,72 @@
+# App Android (Capacitor). En cada push a main genera un APK instalable directamente.
+# - CentroFamiliar-apk: firmado con la clave de depuración del repo → instala encima del anterior sin perder datos.
+# - Si existen los secretos ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS y
+#   ANDROID_KEY_PASSWORD, además genera el AAB firmado para Google Play.
+name: Android
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      VERSION_CODE: ${{ github.run_number }}
+      KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: gradle
+
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+      - run: npx cap sync android
+
+      - name: Compilar APK
+        working-directory: android
+        run: ./gradlew --no-daemon assembleDebug
+
+      - name: Renombrar APK
+        run: cp android/app/build/outputs/apk/debug/app-debug.apk CentroFamiliar.apk
+
+      - uses: actions/upload-artifact@v5
+        with:
+          name: CentroFamiliar-apk
+          path: CentroFamiliar.apk
+          retention-days: 30
+
+      - name: AAB firmado para Google Play (opcional)
+        if: env.KEYSTORE_B64 != ''
+        working-directory: android
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          echo "$KEYSTORE_B64" | base64 --decode > "$RUNNER_TEMP/release.jks"
+          ANDROID_KEYSTORE_PATH="$RUNNER_TEMP/release.jks" ./gradlew --no-daemon bundleRelease
+          rm -f "$RUNNER_TEMP/release.jks"
+
+      - uses: actions/upload-artifact@v5
+        if: env.KEYSTORE_B64 != ''
+        with:
+          name: CentroFamiliar-aab
+          path: android/app/build/outputs/bundle/release/app-release.aab
+          retention-days: 30
