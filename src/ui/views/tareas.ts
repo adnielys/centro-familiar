@@ -96,7 +96,7 @@ function renderSinGasto(): void {
   const conCosto = sinGasto.filter((t) => t.costo?.tipo === "fijo");
   box.hidden = filtro !== "hechas" || !sinGasto.length;
   if (box.hidden) return;
-  box.innerHTML = `<span>${sinGasto.length} ${sinGasto.length === 1 ? "tarea hecha no tiene" : "tareas hechas no tienen"} gasto registrado. Toca «Registrar gasto» en cada una${conCosto.length ? "," : "."}</span>
+  box.innerHTML = `<span>${sinGasto.length} ${sinGasto.length === 1 ? "tarea hecha no tiene" : "tareas hechas no tienen"} gasto registrado. ${conCosto.length ? "Puedes registrarlos todos de una vez o uno a uno con «Registrar gasto»." : "Toca «Registrar gasto» en cada una."}</span>
     ${conCosto.length ? `<button class="btn" type="button" data-registrar-todos>Registrar todos (${conCosto.length} con costo fijo)</button>` : ""}`;
 }
 
