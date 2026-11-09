@@ -15,7 +15,11 @@ export const esc = (s: unknown): string => String(s ?? "").replace(/[&<>"']/g, (
 export const optionsHtml = (entries: ReadonlyArray<readonly [string, string]>, selected: string | null | undefined): string =>
   entries.map(([v, l]) => `<option value="${esc(v)}"${v === (selected ?? "") ? " selected" : ""}>${esc(l)}</option>`).join("");
 
-export const kidOptions = (hijos: readonly Hijo[], emptyLabel = "—"): Array<[string, string]> => [["", emptyLabel], ...hijos.map((k) => [k.id, k.nombre] as [string, string])];
+/** Opciones de hijo para un select; sin hijos registrados, una pista de dónde añadirlos. */
+export const kidOptions = (hijos: readonly Hijo[], emptyLabel = "—"): Array<[string, string]> =>
+  hijos.length
+    ? [["", emptyLabel], ...hijos.map((k) => [k.id, k.nombre] as [string, string])]
+    : [["", "Añádelos en la pestaña Hijos"]];
 
 export const numberFmt = new Intl.NumberFormat("es", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 export const fmtMoney = (n: number, cur: string): string => `${numberFmt.format(n)} ${cur}`;
