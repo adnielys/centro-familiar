@@ -21,12 +21,14 @@ export function migrarGasto(raw: GastoLegacy): { gasto: Gasto; cambiada: boolean
   return { gasto: { ...raw, naturaleza: raw.naturaleza ?? "variable", fijoId: raw.fijoId ?? null }, cambiada: true };
 }
 
-type TareaLegacy = Omit<Tarea, "hijoIds" | "costo" | "repetir" | "gastoId" | "siguienteId"> &
-  Partial<Pick<Tarea, "hijoIds" | "costo" | "repetir" | "gastoId" | "siguienteId">> & { hijoId?: string | null };
+type CostoLegacy = Omit<NonNullable<Tarea["costo"]>, "tipo"> & { tipo?: "fijo" | "estimado" };
+type TareaLegacy = Omit<Tarea, "hijoIds" | "costo" | "repetir" | "gastoId" | "siguienteId" | "serieId"> &
+  Partial<Pick<Tarea, "hijoIds" | "repetir" | "gastoId" | "siguienteId" | "serieId">> & { hijoId?: string | null; costo?: CostoLegacy | null };
 
 /** v0.3 → v0.4: tareas para varios hijos, con costo y repetición. */
 export function migrarTarea(raw: TareaLegacy): { tarea: Tarea; cambiada: boolean } {
-  if (Array.isArray(raw.hijoIds) && raw.costo !== undefined && raw.repetir !== undefined && raw.gastoId !== undefined && raw.siguienteId !== undefined) {
+  const costoOk = raw.costo === null || (raw.costo !== undefined && raw.costo.tipo !== undefined);
+  if (Array.isArray(raw.hijoIds) && costoOk && raw.repetir !== undefined && raw.gastoId !== undefined && raw.siguienteId !== undefined && raw.serieId !== undefined) {
     return { tarea: raw as Tarea, cambiada: false };
   }
   const { hijoId, ...rest } = raw;
@@ -34,10 +36,11 @@ export function migrarTarea(raw: TareaLegacy): { tarea: Tarea; cambiada: boolean
     tarea: {
       ...rest,
       hijoIds: Array.isArray(raw.hijoIds) ? raw.hijoIds : hijoId ? [hijoId] : [],
-      costo: raw.costo ?? null,
+      costo: raw.costo ? { ...raw.costo, tipo: raw.costo.tipo ?? "fijo" } : null,
       repetir: raw.repetir ?? null,
       gastoId: raw.gastoId ?? null,
       siguienteId: raw.siguienteId ?? null,
+      serieId: raw.serieId ?? null,
     },
     cambiada: true,
   };

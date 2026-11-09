@@ -23,7 +23,7 @@ describe("planCompletar", () => {
   });
 
   it("tarea con costo que se repite: gasto fijo + siguiente del mes que viene", () => {
-    const t = tarea({ hijoIds: ["k1", "k2"], repetir: "mensual", costo: { monto: 1500, moneda: "CUP", metodo: "efectivo", categoria: "Educación" } });
+    const t = tarea({ hijoIds: ["k1", "k2"], repetir: "mensual", costo: { tipo: "fijo", monto: 1500, moneda: "CUP", metodo: "efectivo", categoria: "Educación" } });
     const plan = planCompletar(t, "2026-11-08", AHORA, { monto: 1500, moneda: "CUP", metodo: "banca_remota" });
     expect(plan.gasto).toEqual({
       monto: 1500, moneda: "CUP", metodo: "banca_remota", categoria: "Educación", descripcion: "Pagar inglés", fecha: "2026-11-08",
@@ -34,7 +34,7 @@ describe("planCompletar", () => {
   });
 
   it("pago de una tarea puntual es variable y asignado al único hijo", () => {
-    const t = tarea({ hijoIds: ["k1"], costo: { monto: 300, moneda: "USD", metodo: "efectivo", categoria: "Ropa" } });
+    const t = tarea({ hijoIds: ["k1"], costo: { tipo: "fijo", monto: 300, moneda: "USD", metodo: "efectivo", categoria: "Ropa" } });
     const plan = planCompletar(t, "2026-11-08", AHORA, { monto: 280, moneda: "USD", metodo: "efectivo" });
     expect(plan.gasto).toMatchObject({ monto: 280, naturaleza: "variable", hijoId: "k1", categoria: "Ropa" });
     expect(plan.siguiente).toBeNull();
@@ -47,5 +47,36 @@ describe("planCompletar", () => {
 
   it("un pago de 0 no crea gasto", () => {
     expect(planCompletar(tarea(), "2026-11-08", AHORA, { monto: 0, moneda: "CUP", metodo: "efectivo" }).gasto).toBeNull();
+  });
+});
+
+import { promedioReciente } from "../src/domain/tareas";
+
+describe("importe estimado (luz, agua…)", () => {
+  const luz = (over: Partial<Tarea> = {}): Tarea => tarea({
+    titulo: "Pagar luz", repetir: "mensual", costo: { tipo: "estimado", monto: 1500, moneda: "CUP", metodo: "efectivo", categoria: "Servicios" }, ...over,
+  });
+
+  it("promedioReciente usa los últimos 3 pagos", () => {
+    expect(promedioReciente([1000, 1400, 1600, 1900])).toBe(1633.33);
+    expect(promedioReciente([])).toBeNull();
+  });
+
+  it("la siguiente toma el promedio de los últimos pagos de la serie", () => {
+    const plan = planCompletar(luz({ serieId: "s1" }), "2026-11-08", AHORA, { monto: 1800, moneda: "CUP", metodo: "efectivo" }, [1400, 1600]);
+    expect(plan.siguiente?.costo).toMatchObject({ tipo: "estimado", monto: 1600 });
+    expect(plan.siguiente?.serieId).toBe("s1");
+    expect(plan.gasto?.naturaleza).toBe("fijo");
+  });
+
+  it("sin historial la serie arranca con la propia tarea y su primer pago", () => {
+    const plan = planCompletar(luz(), "2026-11-08", AHORA, { monto: 1720, moneda: "CUP", metodo: "efectivo" });
+    expect(plan.siguiente?.serieId).toBe("t1");
+    expect(plan.siguiente?.costo?.monto).toBe(1720);
+  });
+
+  it("un costo fijo no cambia aunque pagues otro importe", () => {
+    const t = luz({ costo: { tipo: "fijo", monto: 1500, moneda: "CUP", metodo: "efectivo", categoria: "Educación" } });
+    expect(planCompletar(t, "2026-11-08", AHORA, { monto: 1450, moneda: "CUP", metodo: "efectivo" }).siguiente?.costo?.monto).toBe(1500);
   });
 });

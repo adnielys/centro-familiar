@@ -28,6 +28,7 @@ export function abrirTareaSheet(t?: Tarea): void {
     moneda: (base.costo?.moneda ?? store.config.monedaPrincipal) as Moneda,
     metodo: (base.costo?.metodo ?? "efectivo") as Metodo,
     repetir: (base.repetir ?? "") as Frecuencia | "",
+    tipoCosto: (base.costo?.tipo ?? "fijo") as "fijo" | "estimado",
     prioridad: base.prioridad as Prioridad,
   };
 
@@ -58,7 +59,8 @@ export function abrirTareaSheet(t?: Tarea): void {
         </div>
 
         <div class="panel" data-for="costo" hidden>
-          <label for="tsMonto">Cuánto cuesta (aproximado) <input id="tsMonto" name="monto" type="number" inputmode="decimal" min="0" step="0.01" value="${esc(base.costo?.monto ?? "")}" placeholder="1500"></label>
+          ${seg("tipoCosto", [["fijo", "Siempre igual"], ["estimado", "Varía (estimado)"]], estado.tipoCosto)}
+          <label for="tsMonto"><span id="tsMontoLabel">Cuánto cuesta</span> <input id="tsMonto" name="monto" type="number" inputmode="decimal" min="0" step="0.01" value="${esc(base.costo?.monto ?? "")}" placeholder="1500"></label>
           ${seg("moneda", MONEDAS.map((m) => [m, m]), estado.moneda)}
           ${seg("metodo", Object.entries(METODOS), estado.metodo)}
           <label for="tsCategoria">Categoría <select id="tsCategoria" name="categoria">${optionsHtml(CATEGORIAS.map((c) => [c, c]), base.costo?.categoria ?? "Otros")}</select></label>
@@ -101,7 +103,7 @@ export function abrirTareaSheet(t?: Tarea): void {
     const textos: Record<Panel, [string, boolean]> = {
       fecha: [vence ? (vence === todayISO() ? "Hoy" : fmtDate(vence)) : "Fecha", Boolean(vence)],
       hora: [hora || "Hora", Boolean(hora)],
-      costo: [monto > 0 ? `${numberFmt.format(monto)} ${estado.moneda}` : "Cuesta", monto > 0],
+      costo: [monto > 0 ? `${estado.tipoCosto === "estimado" ? "~" : ""}${numberFmt.format(monto)} ${estado.moneda}` : "Cuesta", monto > 0],
       repite: [estado.repetir ? REPETICIONES[estado.repetir] : "Se repite", Boolean(estado.repetir)],
       hijos: [hijos.length ? hijos.join(", ") : "Hijos", hijos.length > 0],
       prioridad: [estado.prioridad === "media" ? "Prioridad" : `Prioridad ${PRIORIDADES[estado.prioridad].toLowerCase()}`, estado.prioridad !== "media"],
@@ -112,9 +114,10 @@ export function abrirTareaSheet(t?: Tarea): void {
       b.classList.toggle("on", on);
       b.setAttribute("aria-expanded", String(!form.querySelector<HTMLElement>(`[data-for="${b.dataset.panel}"]`)?.hidden));
     });
+    qs("#tsMontoLabel", form).textContent = estado.tipoCosto === "estimado" ? "Estimado (lo ajusto con tus pagos reales)" : "Cuánto cuesta";
     qs("#tsNota", form).textContent = monto > 0
       ? estado.repetir
-        ? `Al marcarla hecha te pregunto cuánto pagaste y lo registro como gasto fijo. La siguiente se crea sola.`
+        ? `Al marcarla hecha te pregunto cuánto pagaste y lo registro como gasto base. La siguiente se crea sola${estado.tipoCosto === "estimado" ? " con el promedio de tus últimos pagos" : ""}.`
         : `Al marcarla hecha te pregunto cuánto pagaste y lo registro como gasto.`
       : "";
     renderVeredicto(vence, hora);
@@ -180,6 +183,17 @@ export function abrirTareaSheet(t?: Tarea): void {
       else setTimeout(() => document.querySelector<HTMLTextAreaElement>("#capTexto")?.focus(), 50);
     }
   });
+  // Luz, agua, gas, teléfono: lo normal es que el importe varíe.
+  let tipoTocado = Boolean(t?.costo);
+  form.addEventListener("click", (e) => {
+    if ((e.target as HTMLElement).closest('[data-seg="tipoCosto"]')) tipoTocado = true;
+  });
+  input<HTMLSelectElement>("tsCategoria").addEventListener("change", (e) => {
+    if (tipoTocado) return;
+    estado.tipoCosto = (e.target as HTMLSelectElement).value === "Servicios" ? "estimado" : "fijo";
+    form.querySelectorAll<HTMLButtonElement>('[data-seg="tipoCosto"]').forEach((x) => x.setAttribute("aria-pressed", String(x.dataset.value === estado.tipoCosto)));
+    refrescar();
+  });
   form.addEventListener("input", refrescar);
   form.addEventListener("change", refrescar);
   form.addEventListener("submit", (e) => {
@@ -199,11 +213,11 @@ export function abrirTareaSheet(t?: Tarea): void {
     if (area === "personal" && hijoIds.length) area = "hijos";
     const datos = {
       titulo, area, prioridad: estado.prioridad, vence, hijoIds,
-      costo: monto > 0 ? { monto, moneda: estado.moneda, metodo: estado.metodo, categoria: input<HTMLSelectElement>("tsCategoria").value } : null,
+      costo: monto > 0 ? { tipo: estado.tipoCosto, monto, moneda: estado.moneda, metodo: estado.metodo, categoria: input<HTMLSelectElement>("tsCategoria").value } : null,
       repetir: estado.repetir || null,
     };
     const ok = await attempt(async () => {
-      const id = t ? (await store.update("tareas", t.id, datos), t.id) : (await store.add("tareas", { ...datos, estado: "pendiente", completada: null, gastoId: null, siguienteId: null })).id;
+      const id = t ? (await store.update("tareas", t.id, datos), t.id) : (await store.add("tareas", { ...datos, estado: "pendiente", completada: null, gastoId: null, siguienteId: null, serieId: null })).id;
       await sincronizarBloque(id, titulo, vence, hora, Number(input<HTMLSelectElement>("tsDur").value || 60));
     }, t ? "Cambios guardados" : datos.costo ? `Tarea guardada · costo ${fmtMoney(datos.costo.monto, datos.costo.moneda)}` : "Tarea guardada");
     if (ok) sheet.close();

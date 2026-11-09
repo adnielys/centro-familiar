@@ -29,6 +29,8 @@ export interface Hijo extends Entity {
 
 /** Costo previsto de una tarea: al completarla se confirma y se registra como gasto. */
 export interface CostoTarea {
+  /** Importe fijo (siempre igual) o estimado (varía: luz, agua…); el estimado se recalcula con los últimos pagos. */
+  tipo: "fijo" | "estimado";
   monto: number;
   moneda: Moneda;
   metodo: Metodo;
@@ -50,6 +52,8 @@ export interface Tarea extends Entity {
   gastoId: string | null;
   /** Siguiente tarea de la serie ya creada (evita duplicarla al desmarcar y volver a marcar). */
   siguienteId: string | null;
+  /** Id de la primera tarea de una serie repetida (para el historial de pagos). */
+  serieId: string | null;
 }
 
 export interface Gasto extends Entity {

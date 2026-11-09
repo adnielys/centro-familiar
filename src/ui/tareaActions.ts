@@ -10,8 +10,20 @@ import { store } from "../data/store";
 import { attempt, esc, fmtMoney, qs, toast } from "./dom";
 import { openSheet } from "./sheet";
 
+/** Importes pagados anteriormente en la misma serie de tareas, del más antiguo al más reciente. */
+export function pagosDeLaSerie(t: Tarea): Array<{ monto: number; fecha: string }> {
+  const serie = t.serieId ?? t.id;
+  return store.data.tareas
+    .filter((x) => x.id !== t.id && (x.serieId === serie || x.id === serie) && x.gastoId)
+    .map((x) => store.byId("gastos", x.gastoId))
+    .filter((g): g is NonNullable<typeof g> => Boolean(g))
+    .sort((a, b) => a.fecha.localeCompare(b.fecha))
+    .map((g) => ({ monto: g.monto, fecha: g.fecha }));
+}
+
 async function completar(t: Tarea, pago: Pago | null): Promise<void> {
-  const plan = planCompletar(t, todayISO(), new Date().toISOString(), pago);
+  const historial = pagosDeLaSerie(t).map((p) => p.monto);
+  const plan = planCompletar(t, todayISO(), new Date().toISOString(), pago, historial);
   let gastoId: string | null = null;
   let siguienteId = t.siguienteId;
   if (plan.gasto) gastoId = (await store.add("gastos", plan.gasto)).id;
@@ -41,20 +53,23 @@ function pedirPago(t: Tarea, onCancel: () => void): void {
   const costo = t.costo;
   if (!costo) return;
   let resuelto = false;
+  const estimado = costo.tipo === "estimado";
+  const previos = pagosDeLaSerie(t).slice(-3);
   const sheet = openSheet({
-    title: "¿Cuánto pagaste?",
+    title: estimado ? "¿Cuánto fue esta vez?" : "¿Cuánto pagaste?",
     subtitle: t.titulo,
     onClose: () => {
       if (!resuelto) onCancel();
     },
     body: `
       <form id="pagoForm" autocomplete="off" class="stack">
-        <label for="pagoMonto">Importe
-          <input id="pagoMonto" class="big-input" name="monto" type="number" inputmode="decimal" min="0.01" step="0.01" value="${esc(costo.monto)}" required>
+        <label for="pagoMonto">${estimado ? `Importe real (estimado ~${esc(fmtMoney(costo.monto, costo.moneda))})` : "Importe"}
+          <input id="pagoMonto" class="big-input" name="monto" type="number" inputmode="decimal" min="0.01" step="0.01" value="${estimado ? "" : esc(costo.monto)}" placeholder="${esc(costo.monto)}" required>
         </label>
+        ${estimado && previos.length ? `<p class="small muted">Últimos pagos: ${previos.map((p) => `${esc(fmtMoney(p.monto, costo.moneda))} (${esc(fmtDate(p.fecha))})`).join(" · ")}</p>` : ""}
         ${seg("moneda", MONEDAS.map((m) => [m, m]), costo.moneda)}
         ${seg("metodo", Object.entries(METODOS), costo.metodo)}
-        <p class="small muted">Se registra en ${esc(costo.categoria)} como gasto ${t.repetir ? "fijo" : "variable"}${t.repetir ? "; la próxima se crea sola" : ""}.</p>
+        <p class="small muted">Se registra en ${esc(costo.categoria)} como gasto ${t.repetir ? "base (recurrente)" : "variable"}.${t.repetir ? ` La próxima se crea sola${estimado ? " con el estimado actualizado" : ""}.` : ""}</p>
         <button class="btn block" type="submit">Pagado</button>
         <button class="btn ghost block" type="button" data-solo-hecha>Solo marcar hecha, sin gasto</button>
       </form>`,

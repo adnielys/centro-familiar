@@ -409,6 +409,7 @@ function detectIntent(normText, { hasAmount, hijoId, forced }) {
  * ------------------------------------------------------------------ */
 function buildGasto(tokens, normText, ctx, inherited = {}) {
   const confianza = {};
+  const aprox = tokens.takeAny(["aproximadamente", "aproximado", "aprox", "mas o menos", "alrededor de", "unos", "unas", "estimado", "~"]);
   const amount = extractAmount(tokens);
   const moneda = amount?.monedaPegada || keyFromTokens(tokens, MONEDAS) || inherited.moneda || null;
   const metodo = keyFromTokens(tokens, METODOS) || inherited.metodo || null;
@@ -440,6 +441,7 @@ function buildGasto(tokens, normText, ctx, inherited = {}) {
 
 function buildTarea(tokens, normText, ctx, info) {
   // Costo previsto: "pagar inglés 1500 cada mes", "comprar uniforme 20 usd".
+  const aprox = tokens.takeAny(["aproximadamente", "aproximado", "aprox", "mas o menos", "alrededor de", "unos", "unas", "estimado", "~"]);
   const amount = extractAmount(tokens);
   const costoMoneda = amount ? amount.monedaPegada || keyFromTokens(tokens, MONEDAS) || ctx.monedaPorDefecto || "CUP" : null;
   const costoMetodo = amount ? keyFromTokens(tokens, METODOS) || "efectivo" : null;
@@ -460,6 +462,7 @@ function buildTarea(tokens, normText, ctx, info) {
       hora: info.hora || null, duracion: info.duracion || null, repetir: info.repetir || null,
       costoMonto: amount ? amount.monto : null, costoMoneda, costoMetodo,
       costoCategoria: amount ? classifyCategory(normText, ctx.reglas, info.hijoId).categoria : null,
+      costoTipo: amount ? (aprox || classifyCategory(normText, ctx.reglas, info.hijoId).categoria === "Servicios" ? "estimado" : "fijo") : null,
     },
     confianza: { titulo: titulo ? "alta" : "baja", area: area === "personal" ? "baja" : "alta", vence: info.fecha ? "alta" : "baja" },
     explicacion: info.fecha ? "" : "Sin fecha límite detectada",

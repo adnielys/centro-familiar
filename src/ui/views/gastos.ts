@@ -51,7 +51,7 @@ export const gastosView: View = {
           <div class="toggles">
             <div class="seg" id="gMoneda" role="group" aria-label="Moneda"></div>
             <div class="seg" id="gMetodo" role="group" aria-label="Método de pago">${segButtons("metodo", Object.entries(METODOS), ui.metodo)}</div>
-            <div class="seg" id="gNaturaleza" role="group" aria-label="Tipo de gasto">${segButtons("naturaleza", [["variable", "Variable"], ["fijo", "Fijo"]], ui.naturaleza)}</div>
+            <div class="seg" id="gNaturaleza" role="group" aria-label="Tipo de gasto">${segButtons("naturaleza", [["variable", "Variable"], ["fijo", "Base"]], ui.naturaleza)}</div>
           </div>
           <div class="row">
             <label for="gCategoria">Categoría <select id="gCategoria" name="categoria">${optionsHtml(CATEGORIAS.map((c) => [c, c]), "Alimentación")}</select></label>
@@ -104,10 +104,11 @@ export const gastosView: View = {
         <div class="tiles" id="gastoTiles"></div>
 
         <div class="subcard">
-          <h3>Gasto base y gasto variable</h3>
+          <h3>Gasto base (recurrente) y gasto variable</h3>
+          <p class="small muted">Base: lo que se repite cada mes (clases, luz, renta…), aunque el importe cambie. Variable: el resto, donde se ve si estás gastando de más.</p>
           <div class="tiles" id="natTiles"></div>
           <div class="split" id="natSplit"><span class="seg-fijo"></span><span class="seg-variable"></span></div>
-          <div class="legend small"><span><span class="dot dot-fijo"></span>Fijo (base)</span><span><span class="dot dot-variable"></span>Variable</span></div>
+          <div class="legend small"><span><span class="dot dot-fijo"></span>Base</span><span><span class="dot dot-variable"></span>Variable</span></div>
           <div id="natChart"></div>
           <p class="small muted" id="natNota"></p>
         </div>
@@ -374,7 +375,7 @@ function renderResumen(): void {
   // Fijo vs variable
   const r = resumenDelMes(store.data.gastos, store.data.fijos, ui.mes, cur);
   qs("#natTiles", root).innerHTML = `
-    <div class="tile"><div class="num">${esc(numberFmt.format(r.fijoPagado))}</div><div class="lbl">Fijo pagado${r.fijoPrevisto ? ` de ${esc(numberFmt.format(r.fijoPrevisto))} previstos` : ""} (${cur})</div></div>
+    <div class="tile"><div class="num">${esc(numberFmt.format(r.fijoPagado))}</div><div class="lbl">Base pagado${r.fijoPrevisto ? ` de ${esc(numberFmt.format(r.fijoPrevisto))} previstos` : ""} (${cur})</div></div>
     <div class="tile${r.pctVariable >= 50 ? " alert" : ""}"><div class="num">${esc(numberFmt.format(r.variable))}</div><div class="lbl">Variable (${cur}) · ${r.pctVariable}% del gasto</div></div>`;
   const [sf, sv] = Array.from(qs("#natSplit", root).children) as HTMLElement[];
   sf.style.width = `${r.total ? 100 - r.pctVariable : 0}%`;
@@ -382,7 +383,7 @@ function renderResumen(): void {
   const hist = historico(store.data.gastos, ui.mes, cur, 6);
   const mesCorto = (ym: string): string => fmtMonth(ym).slice(0, 3);
   qs("#natChart", root).innerHTML = hist.some((h) => h.fijo || h.variable)
-    ? barrasApiladas(hist.map((h) => ({ label: mesCorto(h.ym), valores: [h.fijo, h.variable] })), ["var(--fijo)", "var(--variable)"], ["Fijo", "Variable"], hist.length - 1)
+    ? barrasApiladas(hist.map((h) => ({ label: mesCorto(h.ym), valores: [h.fijo, h.variable] })), ["var(--fijo)", "var(--variable)"], ["Base", "Variable"], hist.length - 1)
     : `<div class="empty">Cuando registres gastos verás aquí la evolución de los últimos 6 meses.</div>`;
   const anteriores = hist.slice(0, -1).filter((h) => h.fijo || h.variable);
   const media = anteriores.length ? anteriores.reduce((s, h) => s + h.variable, 0) / anteriores.length : 0;

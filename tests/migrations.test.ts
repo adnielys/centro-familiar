@@ -35,8 +35,18 @@ describe("migrarTarea", () => {
     const old = { id: "t1", titulo: "Pagar luz", area: "hogar" as const, prioridad: "alta" as const, vence: null, hijoId: "k1", estado: "pendiente" as const, completada: null };
     const { tarea, cambiada } = migrarTarea(old);
     expect(cambiada).toBe(true);
-    expect(tarea).toMatchObject({ hijoIds: ["k1"], costo: null, repetir: null, gastoId: null, siguienteId: null });
+    expect(tarea).toMatchObject({ hijoIds: ["k1"], costo: null, repetir: null, gastoId: null, siguienteId: null, serieId: null });
     expect("hijoId" in tarea).toBe(false);
     expect(migrarTarea(tarea).cambiada).toBe(false);
+  });
+});
+
+describe("migrarTarea · costo sin tipo", () => {
+  it("un costo antiguo pasa a importe fijo", () => {
+    const old = { id: "t2", titulo: "Inglés", area: "hijos" as const, prioridad: "media" as const, vence: null, hijoIds: [], estado: "pendiente" as const, completada: null,
+      costo: { monto: 1500, moneda: "CUP" as const, metodo: "efectivo" as const, categoria: "Educación" }, repetir: "mensual" as const, gastoId: null, siguienteId: null };
+    const { tarea, cambiada } = migrarTarea(old);
+    expect(cambiada).toBe(true);
+    expect(tarea.costo?.tipo).toBe("fijo");
   });
 });

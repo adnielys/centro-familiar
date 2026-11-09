@@ -23,7 +23,7 @@ interface PropuestaUI extends Propuesta {
 const TIPO_LABEL: Record<TipoPropuesta, string> = { gasto: "Gasto", tarea: "Tarea", deber: "Deber o examen" };
 const FIELD_LABELS: Record<string, string> = {
   monto: "Monto", moneda: "Moneda", naturaleza: "Tipo de gasto", metodo: "Método", categoria: "Categoría", descripcion: "Descripción", fecha: "Fecha", hijoId: "Hijo",
-  titulo: "Tarea", area: "Área", prioridad: "Prioridad", vence: "Fecha", hora: "Hora (para agendar)", duracion: "Duración", costoMonto: "Cuesta", costoMoneda: "Moneda", repetir: "Se repite", materia: "Materia", tipo: "Tipo", entrega: "Para el día",
+  titulo: "Tarea", area: "Área", prioridad: "Prioridad", vence: "Fecha", hora: "Hora (para agendar)", duracion: "Duración", costoMonto: "Cuesta", costoMoneda: "Moneda", repetir: "Se repite", costoTipo: "Importe", materia: "Materia", tipo: "Tipo", entrega: "Para el día",
 };
 const DURACION_DEFECTO = 60;
 const DURACIONES: Array<[string, string]> = [["15", "15 min"], ["30", "30 min"], ["45", "45 min"], ["60", "1 h"], ["90", "1 h 30"], ["120", "2 h"], ["180", "3 h"]];
@@ -173,7 +173,7 @@ function fieldsHtml(p: PropuestaUI): string {
         ${field(p, "categoria", select("categoria", CATEGORIAS.map((c) => [c, c])))}
         ${field(p, "hijoId", select("hijoId", kids))}</div>
       <div class="row">${field(p, "descripcion", input("descripcion", "text", 'maxlength="160"'))}
-        ${field(p, "naturaleza", select("naturaleza", [["variable", "Variable"], ["fijo", "Fijo (gasto base)"]]))}</div>
+        ${field(p, "naturaleza", select("naturaleza", [["variable", "Variable"], ["fijo", "Base (recurrente)"]]))}</div>
       <input type="hidden" name="fijoId" value="${esc(val("fijoId"))}">`;
   }
   if (p.tipo === "tarea") {
@@ -188,6 +188,7 @@ function fieldsHtml(p: PropuestaUI): string {
       <div class="row">${field(p, "costoMonto", input("costoMonto", "number", 'inputmode="decimal" min="0" step="0.01" placeholder="Sin costo"'))}
         ${field(p, "costoMoneda", select("costoMoneda", MONEDAS.map((m) => [m, m])))}
         ${field(p, "repetir", select("repetir", [["", "No se repite"], ...Object.entries(REPETICIONES)]))}</div>
+      ${field(p, "costoTipo", select("costoTipo", [["fijo", "Siempre igual"], ["estimado", "Varía (estimado)"]]))}
       <input type="hidden" name="costoCategoria" value="${esc(val("costoCategoria") || "Otros")}">
       <div class="verdict" data-check role="status" aria-live="polite"></div>`;
   }
@@ -300,8 +301,8 @@ async function guardar(uid: string): Promise<void> {
       const tarea = await store.add("tareas", {
         titulo: v.titulo, area: v.area as Area, prioridad: v.prioridad as Prioridad,
         vence: v.hora || repetir ? fechaBloque : v.vence || null, hijoIds: hijoId ? [hijoId] : [], estado: "pendiente", completada: null,
-        costo: costoMonto > 0 ? { monto: costoMonto, moneda: v.costoMoneda as Moneda, metodo: (p.datos.costoMetodo as Metodo) || "efectivo", categoria: v.costoCategoria || "Otros" } : null,
-        repetir, gastoId: null, siguienteId: null,
+        costo: costoMonto > 0 ? { tipo: v.costoTipo === "estimado" ? "estimado" : "fijo", monto: costoMonto, moneda: v.costoMoneda as Moneda, metodo: (p.datos.costoMetodo as Metodo) || "efectivo", categoria: v.costoCategoria || "Otros" } : null,
+        repetir, gastoId: null, siguienteId: null, serieId: null,
       });
       if (v.hora) {
         const inicio = toMinutes(v.hora);

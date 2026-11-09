@@ -237,3 +237,11 @@ test("tareas con costo y repetición", () => {
   assert.strictEqual(q.datos.costoMonto, 3000);
   assert.strictEqual(one("llamar al plomero mañana a las 10").datos.costoMonto, null);
 });
+
+test("costo estimado: «aprox» o servicios como la luz", () => {
+  const luz = one("pagar la luz 1500 cada mes");
+  assert.strictEqual(luz.datos.costoCategoria, "Servicios");
+  assert.strictEqual(luz.datos.costoTipo, "estimado");
+  assert.strictEqual(one("comprar regalo aprox 30 usd").datos.costoTipo, "estimado");
+  assert.strictEqual(one("pagar inglés 1500 cada mes").datos.costoTipo, "fijo");
+});

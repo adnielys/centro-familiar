@@ -11,7 +11,7 @@ export function tareaItem(t: Tarea, today: ISODate, opts: { agendar?: boolean; e
   const gasto = done ? store.byId("gastos", t.gastoId) : undefined;
   const costo = gasto
     ? `<span class="pill ok">Pagado ${esc(fmtMoney(gasto.monto, gasto.moneda))}</span>`
-    : t.costo && !done ? `<span class="pill">~${esc(fmtMoney(t.costo.monto, t.costo.moneda))}</span>` : "";
+    : t.costo && !done ? `<span class="pill">${t.costo.tipo === "estimado" ? `≈${esc(fmtMoney(t.costo.monto, t.costo.moneda))} estimado` : esc(fmtMoney(t.costo.monto, t.costo.moneda))}</span>` : "";
   const bloque = store.data.bloques.find((b) => b.tareaId === t.id);
   return `<li class="${done ? "done" : ""}">
     <input type="checkbox" class="round-check" data-toggle="tareas" data-id="${esc(t.id)}" ${done ? "checked" : ""} aria-label="Marcar «${esc(t.titulo)}» como hecha">
@@ -41,7 +41,7 @@ export function gastoItem(g: Gasto, opts: { fecha?: boolean; editar?: boolean } 
   const { fecha = true, editar = false } = opts;
   return `<li>
     <div class="grow"><div class="title">${esc(g.descripcion || g.categoria)}</div>
-      <div class="chips">${fecha ? chip(fmtDate(g.fecha)) : ""}${g.naturaleza === "fijo" ? chip("Fijo", "ok") : ""}${chip(g.categoria)}${chip(METODOS[g.metodo])}${kidChip(store.byId("hijos", g.hijoId))}</div>
+      <div class="chips">${fecha ? chip(fmtDate(g.fecha)) : ""}${g.naturaleza === "fijo" ? chip("Base", "ok") : ""}${chip(g.categoria)}${chip(METODOS[g.metodo])}${kidChip(store.byId("hijos", g.hijoId))}</div>
     </div>
     <div class="row-actions col">
       <span class="amount">${esc(fmtMoney(g.monto, g.moneda))}</span>

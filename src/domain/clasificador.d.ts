@@ -20,6 +20,7 @@ export interface DatosPropuesta {
   costoMoneda?: string | null;
   costoMetodo?: string | null;
   costoCategoria?: string | null;
+  costoTipo?: "fijo" | "estimado" | null;
 }
 
 export interface Propuesta {
