@@ -27,3 +27,16 @@ describe("migrarGasto", () => {
     expect(migrarGasto(gasto).cambiada).toBe(false);
   });
 });
+
+import { migrarTarea } from "../src/data/migrations";
+
+describe("migrarTarea", () => {
+  it("convierte hijoId en hijoIds y añade costo/repetición vacíos", () => {
+    const old = { id: "t1", titulo: "Pagar luz", area: "hogar" as const, prioridad: "alta" as const, vence: null, hijoId: "k1", estado: "pendiente" as const, completada: null };
+    const { tarea, cambiada } = migrarTarea(old);
+    expect(cambiada).toBe(true);
+    expect(tarea).toMatchObject({ hijoIds: ["k1"], costo: null, repetir: null, gastoId: null, siguienteId: null });
+    expect("hijoId" in tarea).toBe(false);
+    expect(migrarTarea(tarea).cambiada).toBe(false);
+  });
+});

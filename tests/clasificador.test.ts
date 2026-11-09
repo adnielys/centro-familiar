@@ -217,3 +217,23 @@ test("en varios gastos la moneda no se hereda; el método sí, si el gasto no di
   const s = C.analizarTexto("200 pan, 1500 pollo por banca", ctx);
   assert.deepStrictEqual(s.map((x) => x.datos.metodo), ["banca_remota", "banca_remota"]);
 });
+
+test("tareas con costo y repetición", () => {
+  const r = one("pagar inglés de Ana 1500 cada mes");
+  assert.strictEqual(r.tipo, "tarea");
+  assert.strictEqual(r.datos.titulo, "Pagar inglés");
+  assert.strictEqual(r.datos.hijoId, "k1");
+  assert.strictEqual(r.datos.costoMonto, 1500);
+  assert.strictEqual(r.datos.costoMoneda, "CUP");
+  assert.strictEqual(r.datos.costoCategoria, "Educación");
+  assert.strictEqual(r.datos.repetir, "mensual");
+  const u = one("comprar uniforme 20 usd el viernes");
+  assert.strictEqual(u.datos.costoMonto, 20);
+  assert.strictEqual(u.datos.costoMoneda, "USD");
+  assert.strictEqual(u.datos.vence, "2026-11-13");
+  assert.strictEqual(u.datos.repetir, null);
+  const q = one("pagar niñera cada 15 dias 3000");
+  assert.strictEqual(q.datos.repetir, "quincenal");
+  assert.strictEqual(q.datos.costoMonto, 3000);
+  assert.strictEqual(one("llamar al plomero mañana a las 10").datos.costoMonto, null);
+});

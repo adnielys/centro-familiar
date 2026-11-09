@@ -1,9 +1,16 @@
-/** Navegación por hash (#hoy, #agenda…) entre vistas montadas una sola vez. */
+/**
+ * Navegación por hash (#hoy, #agenda…) entre vistas montadas una sola vez.
+ * Barra inferior con las vistas principales y un botón central de acción (+);
+ * el resto de vistas (Familia, Ajustes, Registrar) se abren desde la cabecera u otros enlaces.
+ */
 import { store } from "../data/store";
+import { ICONS } from "./icons";
 
 export interface View {
   id: string;
   label: string;
+  /** Icono de la barra inferior; sin icono, la vista no aparece en la barra. */
+  icon?: string;
   /** Crea el esqueleto estático (formularios) una sola vez. */
   mount(root: HTMLElement): void;
   /** Repinta las partes dinámicas con el estado actual. */
@@ -12,15 +19,28 @@ export interface View {
   onShow?(): void;
 }
 
-export function startRouter(views: readonly View[], nav: HTMLElement, main: HTMLElement): void {
+export interface RouterOptions {
+  nav: HTMLElement;
+  main: HTMLElement;
+  /** Posición del botón central (+) entre los elementos de la barra. */
+  plusIndex: number;
+  onPlus: () => void;
+}
+
+export function startRouter(views: readonly View[], opts: RouterOptions): void {
   const sections = new Map<string, HTMLElement>();
-  nav.innerHTML = views.map((v) => `<a href="#${v.id}" data-tab="${v.id}">${v.label}</a>`).join("");
+  const enBarra = views.filter((v) => v.icon);
+  const items = enBarra.map((v) => `<a href="#${v.id}" data-tab="${v.id}">${v.icon}<span>${v.label}</span></a>`);
+  items.splice(opts.plusIndex, 0, `<button type="button" class="nav-plus" id="navPlus" aria-label="Nueva tarea o registro">${ICONS.mas}</button>`);
+  opts.nav.innerHTML = items.join("");
+  opts.nav.querySelector("#navPlus")?.addEventListener("click", opts.onPlus);
+
   for (const v of views) {
     const section = document.createElement("section");
     section.className = "view";
     section.id = `view-${v.id}`;
     section.hidden = true;
-    main.appendChild(section);
+    opts.main.appendChild(section);
     v.mount(section);
     sections.set(v.id, section);
   }
@@ -30,11 +50,11 @@ export function startRouter(views: readonly View[], nav: HTMLElement, main: HTML
     const id = location.hash.slice(1);
     active = views.find((v) => v.id === id) ?? views[0];
     sections.forEach((s, id2) => (s.hidden = id2 !== active.id));
-    nav.querySelectorAll<HTMLAnchorElement>("a").forEach((a) => {
+    document.querySelectorAll<HTMLAnchorElement>("[data-tab]").forEach((a) => {
       if (a.dataset.tab === active.id) a.setAttribute("aria-current", "page");
       else a.removeAttribute("aria-current");
     });
-    nav.querySelector<HTMLElement>(`[data-tab="${active.id}"]`)?.scrollIntoView({ block: "nearest", inline: "nearest" });
+    window.scrollTo({ top: 0 });
     active.onShow?.();
     active.update();
   };

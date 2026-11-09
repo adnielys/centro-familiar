@@ -2,9 +2,9 @@
  * Store de la aplicación: estado en memoria + persistencia en IndexedDB + notificación de cambios.
  * Las vistas leen `store.data` / `store.config` y se suscriben con `store.subscribe`.
  */
-import { COLLECTION_NAMES, DEFAULT_CONFIG, type Actividad, type Gasto, type CollectionName, type Collections, type Config } from "../domain/types";
+import { COLLECTION_NAMES, DEFAULT_CONFIG, type Actividad, type Gasto, type Tarea, type CollectionName, type Collections, type Config } from "../domain/types";
 import { dbApi } from "./db";
-import { migrarActividad, migrarGasto } from "./migrations";
+import { migrarActividad, migrarGasto, migrarTarea } from "./migrations";
 
 type Listener = () => void;
 type DataState = { [K in CollectionName]: Collections[K][] };
@@ -102,6 +102,14 @@ class Store {
       gastos.push(gasto);
     }
     this.data.gastos = gastos;
+
+    const tareas: Tarea[] = [];
+    for (const raw of this.data.tareas) {
+      const { tarea, cambiada } = migrarTarea(raw);
+      if (cambiada) await dbApi.put("tareas", tarea);
+      tareas.push(tarea);
+    }
+    this.data.tareas = tareas;
   }
 
   private emit(): void {

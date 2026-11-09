@@ -15,6 +15,11 @@ export interface DatosPropuesta {
   [campo: string]: string | number | null | undefined;
   hora?: HHMM | null;
   duracion?: number | null;
+  repetir?: "mensual" | "quincenal" | "semanal" | null;
+  costoMonto?: number | null;
+  costoMoneda?: string | null;
+  costoMetodo?: string | null;
+  costoCategoria?: string | null;
 }
 
 export interface Propuesta {

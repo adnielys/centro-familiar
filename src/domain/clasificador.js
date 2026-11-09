@@ -17,7 +17,7 @@ const CATEGORIAS = {
   "Hogar": ["limpieza", "detergente", "jabon", "cloro", "suavizante", "colchon", "mueble", "muebles", "ventilador", "bombillo", "ferreteria", "pintura", "reparacion", "plomero", "albanil", "utensilios", "alquiler", "renta", "fregona", "escoba", "papel sanitario", "papel higienico", "cubo", "toallas", "sabanas", "olla", "electrodomestico", "batidora", "lavadora", "nevera", "refrigerador"],
   "Servicios": ["luz", "electricidad", "corriente", "union electrica", "agua", "gas", "telefono", "etecsa", "recarga", "recargas", "internet", "datos", "nauta", "cable", "factura", "une", "saldo movil", "plan de datos", "netflix", "spotify", "streaming", "hosting", "dominio", "suscripcion"],
   "Salud": ["farmacia", "medicina", "medicinas", "medicamento", "medicamentos", "pastillas", "doctor", "medico", "consulta", "dentista", "analisis", "vitaminas", "hospital", "policlinico", "clinica", "jarabe", "antibiotico", "optica", "espejuelos", "lentes"],
-  "Educación": ["escuela", "libreta", "libretas", "libro", "libros", "lapiz", "lapices", "cuaderno", "cuadernos", "mochila", "repaso", "repasador", "maestro", "maestra", "profesor", "profesora", "clases", "curso", "matricula", "colegiatura", "utiles", "boligrafo", "plumones", "crayolas"],
+  "Educación": ["escuela", "libreta", "libretas", "libro", "libros", "lapiz", "lapices", "cuaderno", "cuadernos", "mochila", "repaso", "repasador", "maestro", "maestra", "profesor", "profesora", "clases", "curso", "matricula", "colegiatura", "utiles", "boligrafo", "plumones", "crayolas", "ingles", "baile", "ballet", "danza", "karate", "natacion", "musica", "piano", "guitarra", "academia", "ajedrez", "idiomas"],
   "Ropa": ["ropa", "zapatos", "zapato", "tenis", "pantalon", "pantalones", "camisa", "camisas", "pullover", "pulover", "vestido", "short", "shorts", "medias", "blusa", "sandalias", "chancletas", "uniforme", "ropa interior", "abrigo", "gorra"],
   "Ocio": ["cine", "playa", "parque", "helado", "helados", "fiesta", "salida", "paseo", "cerveza", "cervezas", "ron", "juego", "juegos", "excursion", "piscina", "teatro", "concierto", "bar", "discoteca"],
   "Hijos": ["panales", "juguete", "juguetes", "guarderia", "circulo infantil", "cumpleanos", "pinata", "biberon", "toallitas", "papilla", "cuna", "coche"],
@@ -57,6 +57,12 @@ const MONEDAS = {
 const METODOS = {
   banca_remota: ["banca remota", "por banca", "banca", "transferencia", "transfer", "transferi", "tarjeta", "bandec", "bpa", "metropolitano", "enzona", "transfermovil"],
   efectivo: ["efectivo", "cash", "en mano", "billete", "billetes"],
+};
+
+const REPETICIONES = {
+  mensual: ["cada mes", "todos los meses", "mensual", "mensualmente", "al mes", "por mes"],
+  quincenal: ["cada quincena", "quincenal", "cada 15 dias", "cada quince dias"],
+  semanal: ["cada semana", "todas las semanas", "semanal", "semanalmente", "por semana"],
 };
 
 const VERBOS_GASTO = ["gaste", "pague", "compre", "costo", "costaron", "salio", "gasto", "pagado", "comprado"];
@@ -433,6 +439,10 @@ function buildGasto(tokens, normText, ctx, inherited = {}) {
 }
 
 function buildTarea(tokens, normText, ctx, info) {
+  // Costo previsto: "pagar inglés 1500 cada mes", "comprar uniforme 20 usd".
+  const amount = extractAmount(tokens);
+  const costoMoneda = amount ? amount.monedaPegada || keyFromTokens(tokens, MONEDAS) || ctx.monedaPorDefecto || "CUP" : null;
+  const costoMetodo = amount ? keyFromTokens(tokens, METODOS) || "efectivo" : null;
   let prioridad = "media";
   if (tokens.takeAny(PALABRAS_ALTA) || /!/.test(info.texto)) prioridad = "alta";
   else if (tokens.takeAny(PALABRAS_BAJA)) prioridad = "baja";
@@ -445,7 +455,12 @@ function buildTarea(tokens, normText, ctx, info) {
   const titulo = capitalize(tokens.rest().replace(/!+/g, "").trim());
   return {
     tipo: "tarea",
-    datos: { titulo: titulo || capitalize(info.texto), area, prioridad, vence: info.fecha || null, hijoId: info.hijoId || null, hora: info.hora || null, duracion: info.duracion || null },
+    datos: {
+      titulo: titulo || capitalize(info.texto), area, prioridad, vence: info.fecha || null, hijoId: info.hijoId || null,
+      hora: info.hora || null, duracion: info.duracion || null, repetir: info.repetir || null,
+      costoMonto: amount ? amount.monto : null, costoMoneda, costoMetodo,
+      costoCategoria: amount ? classifyCategory(normText, ctx.reglas, info.hijoId).categoria : null,
+    },
     confianza: { titulo: titulo ? "alta" : "baja", area: area === "personal" ? "baja" : "alta", vence: info.fecha ? "alta" : "baja" },
     explicacion: info.fecha ? "" : "Sin fecha límite detectada",
   };
@@ -522,10 +537,11 @@ function analizarTexto(texto, ctx) {
       .map((r) => withSource(r, original));
   }
 
+  const repetir = intent === "tarea" ? keyFromTokens(globalTokens, REPETICIONES) : null;
   const hora = intent === "tarea" ? extractTime(globalTokens) : null;
   const duracion = intent === "tarea" ? extractDuration(globalTokens) : null;
   consumeTimes(globalTokens);
-  const info = { fecha, hijoId, texto: body, hora, duracion };
+  const info = { fecha, hijoId, texto: body, hora, duracion, repetir };
   const result = intent === "deber" ? buildDeber(globalTokens, normBody, ctx, info) : buildTarea(globalTokens, normBody, ctx, info);
   return [withSource(result, original)];
 }
@@ -535,6 +551,7 @@ function hasAmountOutsideDates(body, ctx) {
   const probe = new Tokens(body);
   extractKid(probe, ctx.hijos);
   extractDate(probe, ctx.hoy, "future");
+  keyFromTokens(probe, REPETICIONES);
   extractTime(probe);
   extractDuration(probe);
   consumeTimes(probe);

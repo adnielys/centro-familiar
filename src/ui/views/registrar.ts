@@ -3,10 +3,11 @@
  * Las tareas con hora se agendan también como bloque, comprobando la disponibilidad.
  */
 import { comprobar } from "../../domain/agenda";
+import { REPETICIONES } from "../../domain/tareas";
 import { AREAS, CATEGORIAS, METODOS, MONEDAS, PRIORIDADES, TIPOS_DEBER } from "../../domain/catalog";
 import { analizarRecibo, analizarTexto, idDeRegla, MATERIAS_LISTA, patronDeAprendizaje, type ContextoClasificador, type DatosPropuesta, type Propuesta, type TipoPropuesta } from "../../domain/clasificador.js";
 import { addDays, fmtDate, toHHMM, toMinutes, todayISO } from "../../domain/dates";
-import type { Area, Metodo, Moneda, Prioridad, TipoDeber } from "../../domain/types";
+import type { Area, Frecuencia, Metodo, Moneda, Prioridad, TipoDeber } from "../../domain/types";
 import { store } from "../../data/store";
 import { reconocerTexto, type OcrProgress } from "../../integrations/ocr";
 import { fuentesAgenda } from "../agendaContext";
@@ -22,7 +23,7 @@ interface PropuestaUI extends Propuesta {
 const TIPO_LABEL: Record<TipoPropuesta, string> = { gasto: "Gasto", tarea: "Tarea", deber: "Deber o examen" };
 const FIELD_LABELS: Record<string, string> = {
   monto: "Monto", moneda: "Moneda", naturaleza: "Tipo de gasto", metodo: "Método", categoria: "Categoría", descripcion: "Descripción", fecha: "Fecha", hijoId: "Hijo",
-  titulo: "Tarea", area: "Área", prioridad: "Prioridad", vence: "Fecha", hora: "Hora (para agendar)", duracion: "Duración", materia: "Materia", tipo: "Tipo", entrega: "Para el día",
+  titulo: "Tarea", area: "Área", prioridad: "Prioridad", vence: "Fecha", hora: "Hora (para agendar)", duracion: "Duración", costoMonto: "Cuesta", costoMoneda: "Moneda", repetir: "Se repite", materia: "Materia", tipo: "Tipo", entrega: "Para el día",
 };
 const DURACION_DEFECTO = 60;
 const DURACIONES: Array<[string, string]> = [["15", "15 min"], ["30", "30 min"], ["45", "45 min"], ["60", "1 h"], ["90", "1 h 30"], ["120", "2 h"], ["180", "3 h"]];
@@ -46,7 +47,9 @@ function agregar(resultados: Propuesta[]): void {
 }
 /** Valores por defecto y vínculo con gastos fijos (sin IA: coincidencia de nombre). */
 function completarPropuesta(r: Propuesta): Propuesta {
-  if (r.tipo === "tarea" && !r.datos.duracion) return { ...r, datos: { ...r.datos, duracion: DURACION_DEFECTO } };
+  if (r.tipo === "tarea") {
+    return { ...r, datos: { ...r.datos, duracion: r.datos.duracion || DURACION_DEFECTO, costoMoneda: r.datos.costoMoneda || store.config.monedaPrincipal } };
+  }
   if (r.tipo !== "gasto") return r;
   const fijo = fijoCoincidente(String(r.datos.descripcion ?? ""), String(r.datos.moneda ?? ""));
   if (!fijo) return { ...r, datos: { ...r.datos, naturaleza: "variable", fijoId: null } };
@@ -182,6 +185,10 @@ function fieldsHtml(p: PropuestaUI): string {
       <div class="row">${field(p, "vence", input("vence", "date"))}
         ${field(p, "hora", input("hora", "time", 'step="300"'))}
         ${field(p, "duracion", select("duracion", DURACIONES))}</div>
+      <div class="row">${field(p, "costoMonto", input("costoMonto", "number", 'inputmode="decimal" min="0" step="0.01" placeholder="Sin costo"'))}
+        ${field(p, "costoMoneda", select("costoMoneda", MONEDAS.map((m) => [m, m])))}
+        ${field(p, "repetir", select("repetir", [["", "No se repite"], ...Object.entries(REPETICIONES)]))}</div>
+      <input type="hidden" name="costoCategoria" value="${esc(val("costoCategoria") || "Otros")}">
       <div class="verdict" data-check role="status" aria-live="polite"></div>`;
   }
   return `
@@ -287,8 +294,15 @@ async function guardar(uid: string): Promise<void> {
   } else if (p.tipo === "tarea") {
     if (!v.titulo) return toast("Escribe qué hay que hacer.");
     const fechaBloque = v.vence || todayISO();
+    const costoMonto = Math.round(Number(v.costoMonto) * 100) / 100;
+    const repetir = (v.repetir || null) as Frecuencia | null;
     accion = async () => {
-      const tarea = await store.add("tareas", { titulo: v.titulo, area: v.area as Area, prioridad: v.prioridad as Prioridad, vence: v.hora ? fechaBloque : v.vence || null, hijoId, estado: "pendiente", completada: null });
+      const tarea = await store.add("tareas", {
+        titulo: v.titulo, area: v.area as Area, prioridad: v.prioridad as Prioridad,
+        vence: v.hora || repetir ? fechaBloque : v.vence || null, hijoIds: hijoId ? [hijoId] : [], estado: "pendiente", completada: null,
+        costo: costoMonto > 0 ? { monto: costoMonto, moneda: v.costoMoneda as Moneda, metodo: (p.datos.costoMetodo as Metodo) || "efectivo", categoria: v.costoCategoria || "Otros" } : null,
+        repetir, gastoId: null, siguienteId: null,
+      });
       if (v.hora) {
         const inicio = toMinutes(v.hora);
         await store.add("bloques", { titulo: v.titulo, fecha: fechaBloque, inicio: v.hora, fin: toHHMM(Math.min(inicio + (Number(v.duracion) || DURACION_DEFECTO), 24 * 60 - 1)), tareaId: tarea.id });

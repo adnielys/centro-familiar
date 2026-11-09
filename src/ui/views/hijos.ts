@@ -14,7 +14,7 @@ let editandoId: string | null = null;
 
 export const hijosView: View = {
   id: "hijos",
-  label: "Hijos",
+  label: "Familia",
 
   mount(el) {
     root = el;
@@ -294,7 +294,7 @@ async function removeKidCascade(kidId: string): Promise<void> {
   }
   for (const d of store.data.deberes.filter((x) => x.hijoId === kidId)) await store.remove("deberes", d.id);
   for (const g of store.data.gastos.filter((x) => x.hijoId === kidId)) await store.update("gastos", g.id, { hijoId: null });
-  for (const t of store.data.tareas.filter((x) => x.hijoId === kidId)) await store.update("tareas", t.id, { hijoId: null });
+  for (const t of store.data.tareas.filter((x) => x.hijoIds.includes(kidId))) await store.update("tareas", t.id, { hijoIds: t.hijoIds.filter((h) => h !== kidId) });
   await store.remove("hijos", kidId);
   hijoSel = null;
 }

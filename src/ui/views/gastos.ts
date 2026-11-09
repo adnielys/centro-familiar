@@ -9,6 +9,7 @@ import { store } from "../../data/store";
 import { barrasApiladas } from "../charts";
 import { attempt, chip, delBtn, emptyLi, esc, fmtMoney, formValues, kidChip, kidOptions, numberFmt, optionsHtml, qs, toast } from "../dom";
 import { gastoItem } from "../items";
+import { ICONS } from "../icons";
 import type { View } from "../router";
 import { gastosDelMes, sumarPor, totalEn } from "../selectors";
 
@@ -34,7 +35,8 @@ function bars(totals: Record<string, number>, cur: string): string {
 
 export const gastosView: View = {
   id: "gastos",
-  label: "Gastos",
+  label: "Dinero",
+  icon: ICONS.gastos,
 
   mount(el) {
     root = el;

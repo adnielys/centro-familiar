@@ -8,6 +8,7 @@ import { store } from "../../data/store";
 import { googleCalendar } from "../../integrations/googleCalendar";
 import { fuentesAgenda } from "../agendaContext";
 import { attempt, esc, formValues, optionsHtml, qs, toast } from "../dom";
+import { ICONS } from "../icons";
 import { navigate, type View } from "../router";
 
 const DURACIONES: Array<[string, string]> = [["15", "15 min"], ["30", "30 min"], ["45", "45 min"], ["60", "1 h"], ["90", "1 h 30"], ["120", "2 h"], ["180", "3 h"], ["240", "4 h"]];
@@ -49,6 +50,7 @@ function suggestStart(form: HTMLFormElement): void {
 export const agendaView: View = {
   id: "agenda",
   label: "Agenda",
+  icon: ICONS.agenda,
 
   mount(el) {
     root = el;

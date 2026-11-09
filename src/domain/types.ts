@@ -10,7 +10,7 @@ export type Prioridad = "alta" | "media" | "baja";
 export type Estado = "pendiente" | "hecha";
 export type TipoActividad = "escuela" | "extraescolar" | "deporte" | "medico" | "otro";
 export type TipoDeber = "deber" | "examen" | "proyecto";
-export type OrigenGasto = "manual" | "texto" | "ocr" | "fijo";
+export type OrigenGasto = "manual" | "texto" | "ocr" | "fijo" | "tarea";
 /** Fijo = gasto base comprometido (colegiaturas, clases, renta…); variable = el resto. */
 export type Naturaleza = "fijo" | "variable";
 export type Frecuencia = "mensual" | "quincenal" | "semanal";
@@ -27,14 +27,29 @@ export interface Hijo extends Entity {
   color: string;
 }
 
+/** Costo previsto de una tarea: al completarla se confirma y se registra como gasto. */
+export interface CostoTarea {
+  monto: number;
+  moneda: Moneda;
+  metodo: Metodo;
+  categoria: string;
+}
+
 export interface Tarea extends Entity {
   titulo: string;
   area: Area;
   prioridad: Prioridad;
   vence: ISODate | null;
-  hijoId: string | null;
+  hijoIds: string[];
   estado: Estado;
   completada: string | null;
+  costo: CostoTarea | null;
+  /** Si se repite, al completarla se crea la siguiente. Con costo y repetición cuenta como gasto fijo. */
+  repetir: Frecuencia | null;
+  /** Gasto creado al completarla (para poder deshacer). */
+  gastoId: string | null;
+  /** Siguiente tarea de la serie ya creada (evita duplicarla al desmarcar y volver a marcar). */
+  siguienteId: string | null;
 }
 
 export interface Gasto extends Entity {

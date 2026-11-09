@@ -10,7 +10,10 @@ import { COLLECTION_NAMES } from "./domain/types";
 import { store } from "./data/store";
 import { attempt, confirmTap, qs, toast } from "./ui/dom";
 import { pagarFijo } from "./ui/fijosActions";
+import { ICONS } from "./ui/icons";
 import { startRouter } from "./ui/router";
+import { alternarTarea } from "./ui/tareaActions";
+import { abrirTareaSheet } from "./ui/tareaSheet";
 import { agendaView, agendarTarea } from "./ui/views/agenda";
 import { ajustesView } from "./ui/views/ajustes";
 import { gastosView } from "./ui/views/gastos";
@@ -33,19 +36,28 @@ function bindDelete(): void {
   });
 }
 
-/** Casillas de "hecho" en tareas y deberes. */
+/** Casillas de "hecho": las tareas pasan por su flujo (pago, repetición); los deberes se marcan directo. */
 function bindToggle(): void {
   document.addEventListener("change", (e) => {
     const el = e.target as HTMLInputElement;
     const col = el.dataset?.toggle;
     const id = el.dataset?.id;
-    if ((col !== "tareas" && col !== "deberes") || !id) return;
-    const hecha = el.checked;
-    void attempt(() =>
-      col === "tareas"
-        ? store.update("tareas", id, { estado: hecha ? "hecha" : "pendiente", completada: hecha ? new Date().toISOString() : null })
-        : store.update("deberes", id, { estado: hecha ? "hecha" : "pendiente" }),
-    );
+    if (!id) return;
+    if (col === "tareas") {
+      const tarea = store.byId("tareas", id);
+      if (tarea) alternarTarea(tarea, el.checked, el);
+    } else if (col === "deberes") {
+      void attempt(() => store.update("deberes", id, { estado: el.checked ? "hecha" : "pendiente" }));
+    }
+  });
+}
+
+/** "Editar" de una tarea en cualquier lista abre la hoja de edición. */
+function bindEditarTarea(): void {
+  document.addEventListener("click", (e) => {
+    const btn = (e.target as HTMLElement).closest<HTMLElement>("[data-edit-tarea]");
+    const tarea = btn ? store.byId("tareas", btn.dataset.editTarea) : undefined;
+    if (tarea) abrirTareaSheet(tarea);
   });
 }
 
@@ -81,7 +93,16 @@ async function main(): Promise<void> {
   bindToggle();
   bindAgendar();
   bindPagarFijo();
-  startRouter([hoyView, agendaView, registrarView, tareasView, gastosView, hijosView, ajustesView], qs("#nav"), qs("#appMain"));
+  bindEditarTarea();
+  qs("#topActions").innerHTML = `
+    <a class="icon-btn round" href="#hijos" data-tab="hijos" aria-label="Familia">${ICONS.familia}</a>
+    <a class="icon-btn round" href="#ajustes" data-tab="ajustes" aria-label="Ajustes">${ICONS.ajustes}</a>`;
+  startRouter([hoyView, agendaView, tareasView, gastosView, registrarView, hijosView, ajustesView], {
+    nav: qs("#nav"),
+    main: qs("#appMain"),
+    plusIndex: 2,
+    onPlus: () => abrirTareaSheet(),
+  });
 
   // Pide almacenamiento persistente para que el sistema no borre los datos por falta de espacio.
   void navigator.storage?.persist?.();

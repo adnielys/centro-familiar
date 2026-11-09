@@ -6,6 +6,7 @@ import { store } from "../../data/store";
 import { fuentesAgenda } from "../agendaContext";
 import { chip, emptyLi, esc, fmtMoney, numberFmt, qs } from "../dom";
 import { actividadItem, deberItem, gastoItem, tareaItem } from "../items";
+import { ICONS } from "../icons";
 import type { View } from "../router";
 import { actividadesDelDia, deberesProximos, gastosDelMes, tareasUrgentes, totalEn } from "../selectors";
 
@@ -14,6 +15,7 @@ let root: HTMLElement;
 export const hoyView: View = {
   id: "hoy",
   label: "Hoy",
+  icon: ICONS.hoy,
 
   mount(el) {
     root = el;
