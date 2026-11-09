@@ -59,8 +59,11 @@ export const hoyView: View = {
     const fijos = pendientesHasta(store.data.fijos, store.data.gastos, today, addDays(today, 7));
     qs("#hoyFijosCard", root).hidden = !store.data.fijos.length;
     qs("#hoyFijos", root).innerHTML = fijos.length
-      ? fijos.map(({ fijo, fecha, vencido }) => `<li><div class="grow"><div class="title">${esc(fijo.nombre)}</div><div class="chips">${chip(vencido ? `Vencido · ${fmtDate(fecha)}` : fecha === today ? "Hoy" : fmtDate(fecha), vencido ? "bad" : "warn")}</div></div>
-          <div class="row-actions col"><span class="amount">${esc(fmtMoney(fijo.monto, fijo.moneda))}</span><button class="icon-btn accent" type="button" data-pagar-fijo="${esc(fijo.id)}">Registrar pago</button></div></li>`).join("")
+      ? fijos.map(({ fijo, fecha, vencido }) => `<li><div class="grow">
+          <div class="item-head"><span class="title">${esc(fijo.nombre)}</span><span class="amount">${esc(fmtMoney(fijo.monto, fijo.moneda))}</span></div>
+          <div class="item-foot">${chip(vencido ? `Vencido · ${fmtDate(fecha)}` : fecha === today ? "Hoy" : fmtDate(fecha), vencido ? "bad" : "warn")}
+            <button class="icon-btn accent" type="button" data-pagar-fijo="${esc(fijo.id)}">Registrar pago</button></div>
+        </div></li>`).join("")
       : emptyLi("Ningún pago fijo pendiente esta semana.");
     qs("#hoyTareas", root).innerHTML = urgentes.length ? urgentes.map((t) => tareaItem(t, today, { agendar: true })).join("") : emptyLi("Nada vencido ni para hoy.");
     const ninos = actividadesDelDia(today);

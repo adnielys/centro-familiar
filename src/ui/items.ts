@@ -39,17 +39,14 @@ export function deberItem(d: Deber, today: ISODate, showKid: boolean): string {
 
 export function gastoItem(g: Gasto, opts: { fecha?: boolean; editar?: boolean } = {}): string {
   const { fecha = true, editar = false } = opts;
-  return `<li>
-    <div class="grow"><div class="title">${esc(g.descripcion || g.categoria)}</div>
-      <div class="chips">${fecha ? chip(fmtDate(g.fecha)) : ""}${g.naturaleza === "fijo" ? chip("Base", "ok") : ""}${chip(g.categoria)}${chip(METODOS[g.metodo])}${kidChip(store.byId("hijos", g.hijoId))}</div>
-    </div>
-    <div class="row-actions col">
-      <span class="amount">${esc(fmtMoney(g.monto, g.moneda))}</span>
-      <div class="row-actions">
-        ${editar ? `<button class="icon-btn" type="button" data-edit-gasto="${esc(g.id)}">Editar</button>` : ""}
-        ${delBtn("gastos", g.id)}
-      </div>
-    </div></li>`;
+  return `<li><div class="grow">
+    <div class="item-head"><span class="title">${esc(g.descripcion || g.categoria)}</span><span class="amount">${esc(fmtMoney(g.monto, g.moneda))}</span></div>
+    <div class="chips">${fecha ? chip(fmtDate(g.fecha)) : ""}${g.naturaleza === "fijo" ? chip("Base", "ok") : ""}${chip(g.categoria)}${chip(METODOS[g.metodo])}${kidChip(store.byId("hijos", g.hijoId))}</div>
+    <div class="item-foot"><span class="item-actions">
+      ${editar ? `<button class="icon-btn" type="button" data-edit-gasto="${esc(g.id)}">Editar</button>` : ""}
+      ${delBtn("gastos", g.id)}
+    </span></div>
+  </div></li>`;
 }
 
 export function actividadItem(a: Actividad): string {

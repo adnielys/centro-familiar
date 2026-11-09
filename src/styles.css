@@ -260,6 +260,8 @@ body.sheet-open { overflow: hidden; }
 /* ---------- Tareas ---------- */
 .pill { font-size: 12px; font-weight: 600; padding: 2px 10px; border-radius: 99px; background: color-mix(in srgb, var(--warn) 16%, transparent); color: var(--warn); white-space: nowrap; }
 .pill.ok { background: color-mix(in srgb, var(--ok) 16%, transparent); color: var(--ok); }
+.item-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.item-head .amount { text-align: right; }
 .item-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
 .item-actions { display: flex; gap: 2px; margin-left: auto; }
 body.sheet-open .toast { bottom: auto; top: calc(16px + env(safe-area-inset-top)); }

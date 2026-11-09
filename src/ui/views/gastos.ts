@@ -289,18 +289,17 @@ function renderFijos(): void {
           : e.vencido ? chip(`Vencido · ${fmtDate(e.proximo as string)}`, "bad")
           : chip(`${e.pagos ? `${e.pagos}/${e.esperados} · ` : ""}Vence ${fmtDate(e.proximo as string)}`, "warn");
         const kids = f.hijoIds.map((id) => kidChip(store.byId("hijos", id))).join("");
-        return `<li>
-          <div class="grow"><div class="title">${esc(f.nombre)}</div>
-            <div class="chips">${estado}${chip(`${FRECUENCIAS[f.frecuencia]} · ${diaPagoTexto(f)}`)}${chip(f.categoria)}${kids}</div>
-          </div>
-          <div class="row-actions col">
-            <span class="amount">${esc(fmtMoney(f.monto, f.moneda))}</span>
-            <div class="row-actions">
-              ${f.activo && !e.completo ? `<button class="icon-btn accent" type="button" data-pagar-fijo="${esc(f.id)}">Registrar pago</button>` : ""}
+        return `<li><div class="grow">
+          <div class="item-head"><span class="title">${esc(f.nombre)}</span><span class="amount">${esc(fmtMoney(f.monto, f.moneda))}</span></div>
+          <div class="chips">${estado}${chip(`${FRECUENCIAS[f.frecuencia]} · ${diaPagoTexto(f)}`)}${chip(f.categoria)}${kids}</div>
+          <div class="item-foot">
+            ${f.activo && !e.completo ? `<button class="icon-btn accent" type="button" data-pagar-fijo="${esc(f.id)}">Registrar pago</button>` : ""}
+            <span class="item-actions">
               <button class="icon-btn" type="button" data-edit-fijo="${esc(f.id)}">Editar</button>
               ${delBtn("fijos", f.id)}
-            </div>
-          </div></li>`;
+            </span>
+          </div>
+        </div></li>`;
       }).join("")
     : emptyLi("Aún no tienes gastos fijos. Añade las clases, la colegiatura o la renta para separarlos de los gastos del día a día.");
 }
