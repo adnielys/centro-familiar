@@ -1,7 +1,8 @@
 /** Filas de lista reutilizadas por varias vistas. */
 import { AREAS, METODOS, TIPOS_ACTIVIDAD, TIPOS_DEBER } from "../domain/catalog";
 import { REPETICIONES } from "../domain/tareas";
-import { fmtDate } from "../domain/dates";
+import { enPeriodoActual } from "../domain/periodos";
+import { fmtDate, fmtMonth, monthOf } from "../domain/dates";
 import type { Actividad, Deber, Gasto, ISODate, Tarea } from "../domain/types";
 import { store } from "../data/store";
 import { chip, delBtn, dueChip, esc, fmtMoney, kidChip, kidColor } from "./dom";
@@ -13,10 +14,13 @@ export function tareaItem(t: Tarea, today: ISODate, opts: { agendar?: boolean; e
     ? `<span class="pill ok">Pagado ${esc(fmtMoney(gasto.monto, gasto.moneda))}</span>`
     : t.costo && !done ? `<span class="pill">${t.costo.tipo === "estimado" ? `≈${esc(fmtMoney(t.costo.monto, t.costo.moneda))} estimado` : esc(fmtMoney(t.costo.monto, t.costo.moneda))}</span>` : "";
   const bloque = store.data.bloques.find((b) => b.tareaId === t.id);
-  return `<li class="${done ? "done" : ""}">
-    <input type="checkbox" class="round-check" data-toggle="tareas" data-id="${esc(t.id)}" ${done ? "checked" : ""} aria-label="Marcar «${esc(t.titulo)}» como hecha">
+  const bloqueada = !done && !enPeriodoActual(t, today);
+  const cuando = bloqueada && t.vence ? (t.repetir === "semanal" ? `la semana del ${fmtDate(t.vence)}` : fmtMonth(monthOf(t.vence)).replace(/ de \d{4}$/, "")) : "";
+  return `<li class="${done ? "done" : ""}${bloqueada ? " locked" : ""}">
+    <input type="checkbox" class="round-check" data-toggle="tareas" data-id="${esc(t.id)}" ${done ? "checked" : ""}${bloqueada ? ` aria-disabled="true" title="Se podrá marcar en ${esc(cuando)}"` : ""} aria-label="Marcar «${esc(t.titulo)}» como hecha">
     <div class="grow"><div class="title">${esc(t.titulo)}</div>
       <div class="chips">${done ? "" : dueChip(t.vence, today)}${bloque && !done ? chip(bloque.inicio) : ""}${t.repetir ? chip(REPETICIONES[t.repetir]) : ""}${t.area !== "hijos" ? chip(AREAS[t.area]) : ""}${t.prioridad === "alta" ? chip("Alta", "bad") : ""}${t.hijoIds.map((id) => kidChip(store.byId("hijos", id))).join("")}</div>
+      ${bloqueada ? `<div class="small muted">Se podrá marcar en ${esc(cuando)}</div>` : ""}
       <div class="item-foot">
         ${costo}
         <span class="item-actions">

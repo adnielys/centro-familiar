@@ -51,14 +51,26 @@ export const delBtn = (col: CollectionName, id: string, label = "Borrar"): strin
   `<button class="icon-btn" type="button" data-del="${col}" data-id="${esc(id)}">${esc(label)}</button>`;
 
 let toastTimer: number | undefined;
-export function toast(msg: string): void {
+/** Aviso breve; con `accion` muestra un botón (p. ej. «Deshacer») y dura más. */
+export function toast(msg: string, accion?: { label: string; fn: () => void }): void {
   const el = qs("#toast");
   el.textContent = msg;
+  if (accion) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "toast-action";
+    btn.textContent = accion.label;
+    btn.addEventListener("click", () => {
+      el.hidden = true;
+      accion.fn();
+    }, { once: true });
+    el.appendChild(btn);
+  }
   el.hidden = false;
   window.clearTimeout(toastTimer);
   toastTimer = window.setTimeout(() => {
     el.hidden = true;
-  }, 2800);
+  }, accion ? 6000 : 2800);
 }
 
 /** Ejecuta una acción con aviso de error uniforme. Devuelve true si salió bien. */

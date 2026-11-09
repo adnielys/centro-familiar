@@ -276,6 +276,7 @@ h3.sub { font-size: 14px; margin-top: 6px; }
 .item-actions { display: flex; gap: 2px; margin-left: auto; }
 body.sheet-open .toast { bottom: auto; top: calc(16px + env(safe-area-inset-top)); }
 input.round-check { appearance: none; -webkit-appearance: none; width: 26px; height: 26px; border-radius: 50%; border: 2px solid var(--muted); margin: 0; cursor: pointer; display: grid; place-items: center; background: transparent; }
+li.locked input.round-check { border-style: dashed; opacity: .45; }
 input.round-check:checked { background: var(--ok); border-color: var(--ok); }
 input.round-check:checked::after { content: ""; width: 7px; height: 12px; border: solid #fff; border-width: 0 2.5px 2.5px 0; transform: translateY(-1px) rotate(45deg); }
 
@@ -284,3 +285,5 @@ input.round-check:checked::after { content: ""; width: 7px; height: 12px; border
   background: var(--ink); color: var(--bg); padding: 10px 16px; border-radius: 10px; font-size: 14px; max-width: calc(100% - 32px); z-index: 30;
 }
 .toast[hidden] { display: none; }
+.toast { display: flex; align-items: center; gap: 12px; }
+.toast-action { background: none; border: 0; color: var(--accent-soft); font-weight: 700; text-transform: uppercase; font-size: 13px; letter-spacing: .03em; cursor: pointer; padding: 4px; }

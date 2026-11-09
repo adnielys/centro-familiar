@@ -3,7 +3,8 @@
  * si se repite, se crea la siguiente de la serie (con su bloque de agenda, si lo tenía).
  */
 import { METODOS, MONEDAS } from "../domain/catalog";
-import { fmtDate, todayISO } from "../domain/dates";
+import { fmtDate, fmtMonth, monthOf, todayISO } from "../domain/dates";
+import { enPeriodoActual } from "../domain/periodos";
 import { planCompletar, type Pago } from "../domain/tareas";
 import type { Metodo, Moneda, Tarea } from "../domain/types";
 import { store } from "../data/store";
@@ -37,7 +38,17 @@ async function completar(t: Tarea, pago: Pago | null): Promise<void> {
   }
   await store.update("tareas", t.id, { ...plan.patch, gastoId, siguienteId });
   const partes = [gastoId && pago ? `gasto de ${fmtMoney(pago.monto, pago.moneda)} registrado` : "", plan.siguiente?.vence ? `próxima: ${fmtDate(plan.siguiente.vence)}` : ""].filter(Boolean);
-  toast(partes.length ? `Hecha · ${partes.join(" · ")}` : "Tarea hecha");
+  const deshacer = (): void => {
+    const actual = store.byId("tareas", t.id);
+    if (actual) void attempt(() => reabrir(actual, true), "Deshecho");
+  };
+  toast(partes.length ? `Hecha · ${partes.join(" · ")}` : "Tarea hecha", { label: "Deshacer", fn: deshacer });
+}
+
+/** Mensaje cuando la tarea aún no es del periodo actual. */
+export function motivoBloqueo(t: Tarea, hoy = todayISO()): string | null {
+  if (enPeriodoActual(t, hoy) || !t.vence) return null;
+  return t.repetir === "semanal" ? `Es de la semana del ${fmtDate(t.vence)}: podrás marcarla esa semana.` : `Es de ${fmtMonth(monthOf(t.vence))}: podrás marcarla cuando llegue ese mes.`;
 }
 
 async function reabrir(t: Tarea, borrarGasto: boolean): Promise<void> {
@@ -131,7 +142,14 @@ function pedirDeshacer(t: Tarea, onCancel: () => void): void {
 /** Punto de entrada del check de una tarea (desde cualquier lista). */
 export function alternarTarea(t: Tarea, marcada: boolean, checkbox: HTMLInputElement): void {
   if (marcada) {
-    if (t.costo) pedirPago(t, () => (checkbox.checked = false));
+    const bloqueo = motivoBloqueo(t);
+    if (bloqueo) {
+      checkbox.checked = false;
+      toast(bloqueo);
+      return;
+    }
+    if (t.costo?.tipo === "estimado") pedirPago(t, () => (checkbox.checked = false));
+    else if (t.costo) void attempt(() => completar(t, { monto: t.costo!.monto, moneda: t.costo!.moneda, metodo: t.costo!.metodo }));
     else void attempt(() => completar(t, null));
     return;
   }

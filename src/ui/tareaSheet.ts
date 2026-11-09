@@ -115,10 +115,9 @@ export function abrirTareaSheet(t?: Tarea): void {
       b.setAttribute("aria-expanded", String(!form.querySelector<HTMLElement>(`[data-for="${b.dataset.panel}"]`)?.hidden));
     });
     qs("#tsMontoLabel", form).textContent = estado.tipoCosto === "estimado" ? "Estimado (lo ajusto con tus pagos reales)" : "Cuánto cuesta";
+    const alMarcar = estado.tipoCosto === "estimado" ? "te pregunto cuánto fue y lo registro" : "el gasto se registra automáticamente";
     qs("#tsNota", form).textContent = monto > 0
-      ? estado.repetir
-        ? `Al marcarla hecha te pregunto cuánto pagaste y lo registro como gasto base. La siguiente se crea sola${estado.tipoCosto === "estimado" ? " con el promedio de tus últimos pagos" : ""}.`
-        : `Al marcarla hecha te pregunto cuánto pagaste y lo registro como gasto.`
+      ? `Al marcarla hecha ${alMarcar}${estado.repetir ? " como gasto base. La siguiente se crea sola" : ""}${estado.repetir && estado.tipoCosto === "estimado" ? " con el promedio de tus últimos pagos" : ""}.`
       : "";
     renderVeredicto(vence, hora);
   }
