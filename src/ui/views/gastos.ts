@@ -3,11 +3,12 @@
  */
 import { CATEGORIAS, DIAS_CORTOS, METODOS, MONEDAS } from "../../domain/catalog";
 import { daysInMonth, fmtDate, fmtMonth, monthOf, todayISO } from "../../domain/dates";
-import { estadoDelMes, FRECUENCIAS, historico, resumenDelMes } from "../../domain/fijos";
+import { balanceDelMes, resumenDe, type Balance } from "../../domain/balance";
+import { estadoDelMes, FRECUENCIAS, historico, mesesHasta, resumenDelMes } from "../../domain/fijos";
 import type { Frecuencia, Gasto, GastoFijo, Metodo, Moneda, Naturaleza } from "../../domain/types";
 import { store } from "../../data/store";
 import { barrasApiladas } from "../charts";
-import { attempt, chip, delBtn, emptyLi, esc, fmtMoney, formValues, kidChip, kidOptions, numberFmt, optionsHtml, qs, toast } from "../dom";
+import { attempt, chip, confirmTap, delBtn, emptyLi, esc, fmtMoney, formValues, kidChip, kidOptions, numberFmt, optionsHtml, qs, toast } from "../dom";
 import { gastoItem } from "../items";
 import { ICONS } from "../icons";
 import type { View } from "../router";
@@ -41,30 +42,48 @@ export const gastosView: View = {
   mount(el) {
     root = el;
     el.innerHTML = `
-      <div class="card" id="gastoCard">
-        <h2 id="gastoTitulo">Registrar gasto</h2>
-        <form id="formGasto" autocomplete="off">
-          <div class="row">
-            <label for="gMonto">Monto <input id="gMonto" name="monto" type="number" inputmode="decimal" min="0.01" step="0.01" required placeholder="350"></label>
-            <label for="gFecha">Fecha <input id="gFecha" name="fecha" type="date" required></label>
-          </div>
-          <div class="toggles">
-            <div class="seg" id="gMoneda" role="group" aria-label="Moneda"></div>
-            <div class="seg" id="gMetodo" role="group" aria-label="Método de pago">${segButtons("metodo", Object.entries(METODOS), ui.metodo)}</div>
-            <div class="seg" id="gNaturaleza" role="group" aria-label="Tipo de gasto">${segButtons("naturaleza", [["variable", "Variable"], ["fijo", "Base"]], ui.naturaleza)}</div>
-          </div>
-          <div class="row">
-            <label for="gCategoria">Categoría <select id="gCategoria" name="categoria">${optionsHtml(CATEGORIAS.map((c) => [c, c]), "Alimentación")}</select></label>
-            <label for="gHijo">Para (opcional) <select id="gHijo" name="hijoId"></select></label>
-          </div>
-          <label for="gDesc">Descripción <input id="gDesc" name="descripcion" maxlength="160" placeholder="Almuerzo, agromercado, recarga…"></label>
-          <div class="actions">
-            <button class="btn" type="submit" id="gGuardar">Guardar gasto</button>
-            <button class="btn ghost" type="button" id="gCancelar" hidden>Cancelar edición</button>
-          </div>
-        </form>
+      <div class="card" id="balanceCard">
+        <div class="card-head">
+          <h2 id="balTitulo">Balance del mes</h2>
+          <label for="gMes" class="inline-label">Mes <input id="gMes" type="month"></label>
+        </div>
+        <div id="balEstado"></div>
+        <div id="balMonedas" class="stack"></div>
+        <div class="actions">
+          <button class="btn" type="button" id="balCerrar">Cerrar mes</button>
+          <button class="btn ghost" type="button" id="balCompartir">Compartir resumen</button>
+        </div>
       </div>
+      <div class="card">
+        <div class="card-head">
+          <h2>Análisis del mes</h2>
+          <div class="toggles">
+            <label for="gPrincipal">Análisis en <select id="gPrincipal">${optionsHtml(MONEDAS.map((m) => [m, m]), store.config.monedaPrincipal)}</select></label>
+          </div>
+        </div>
+        <div class="tiles" id="gastoTiles"></div>
 
+        <div class="subcard">
+          <h3>Gasto base (recurrente) y gasto variable</h3>
+          <p class="small muted">Base: lo que se repite cada mes (clases, luz, renta…), aunque el importe cambie. Variable: el resto, donde se ve si estás gastando de más.</p>
+          <div class="tiles" id="natTiles"></div>
+          <div class="split" id="natSplit"><span class="seg-fijo"></span><span class="seg-variable"></span></div>
+          <div class="legend small"><span><span class="dot dot-fijo"></span>Base</span><span><span class="dot dot-variable"></span>Variable</span></div>
+          <div id="natChart"></div>
+          <p class="small muted" id="natNota"></p>
+        </div>
+
+        <div class="grid2">
+          <div class="subcard"><h3>Gasto variable por categoría</h3><p class="small muted">Aquí se ve dónde se va el dinero extra.</p><div class="bars" id="gastoCategorias"></div></div>
+          <div class="subcard">
+            <h3>Por método de pago</h3>
+            <div class="split" id="gastoSplit"><span></span><span></span></div>
+            <div class="legend small" id="gastoSplitLegend"></div>
+            <h3>Por hijo</h3>
+            <div class="bars" id="gastoHijos"></div>
+          </div>
+        </div>
+      </div>
       <div class="card" id="fijosCard">
         <div class="card-head"><h2>Gastos fijos</h2><span class="small muted" id="fijosMes"></span></div>
         <p class="small muted">Tus compromisos de cada mes: clases, colegiatura, renta, niñera… Marca cada pago con «Registrar pago».</p>
@@ -93,38 +112,36 @@ export const gastosView: View = {
         </details>
       </div>
 
-      <div class="card">
-        <div class="card-head">
-          <h2>Resumen del mes</h2>
+      <div class="card" id="gastoCard">
+        <h2 id="gastoTitulo">Registrar gasto</h2>
+        <form id="formGasto" autocomplete="off">
+          <div class="row">
+            <label for="gMonto">Monto <input id="gMonto" name="monto" type="number" inputmode="decimal" min="0.01" step="0.01" required placeholder="350"></label>
+            <label for="gFecha">Fecha <input id="gFecha" name="fecha" type="date" required></label>
+          </div>
           <div class="toggles">
-            <label for="gMes">Mes <input id="gMes" type="month"></label>
-            <label for="gPrincipal">Análisis en <select id="gPrincipal">${optionsHtml(MONEDAS.map((m) => [m, m]), store.config.monedaPrincipal)}</select></label>
+            <div class="seg" id="gMoneda" role="group" aria-label="Moneda"></div>
+            <div class="seg" id="gMetodo" role="group" aria-label="Método de pago">${segButtons("metodo", Object.entries(METODOS), ui.metodo)}</div>
+            <div class="seg" id="gNaturaleza" role="group" aria-label="Tipo de gasto">${segButtons("naturaleza", [["variable", "Variable"], ["fijo", "Base"]], ui.naturaleza)}</div>
           </div>
-        </div>
-        <div class="tiles" id="gastoTiles"></div>
-
-        <div class="subcard">
-          <h3>Gasto base (recurrente) y gasto variable</h3>
-          <p class="small muted">Base: lo que se repite cada mes (clases, luz, renta…), aunque el importe cambie. Variable: el resto, donde se ve si estás gastando de más.</p>
-          <div class="tiles" id="natTiles"></div>
-          <div class="split" id="natSplit"><span class="seg-fijo"></span><span class="seg-variable"></span></div>
-          <div class="legend small"><span><span class="dot dot-fijo"></span>Base</span><span><span class="dot dot-variable"></span>Variable</span></div>
-          <div id="natChart"></div>
-          <p class="small muted" id="natNota"></p>
-        </div>
-
-        <div class="grid2">
-          <div class="subcard"><h3>Gasto variable por categoría</h3><p class="small muted">Aquí se ve dónde se va el dinero extra.</p><div class="bars" id="gastoCategorias"></div></div>
-          <div class="subcard">
-            <h3>Por método de pago</h3>
-            <div class="split" id="gastoSplit"><span></span><span></span></div>
-            <div class="legend small" id="gastoSplitLegend"></div>
-            <h3>Por hijo</h3>
-            <div class="bars" id="gastoHijos"></div>
+          <div class="row">
+            <label for="gCategoria">Categoría <select id="gCategoria" name="categoria">${optionsHtml(CATEGORIAS.map((c) => [c, c]), "Alimentación")}</select></label>
+            <label for="gHijo">Para (opcional) <select id="gHijo" name="hijoId"></select></label>
           </div>
-        </div>
+          <label for="gDesc">Descripción <input id="gDesc" name="descripcion" maxlength="160" placeholder="Almuerzo, agromercado, recarga…"></label>
+          <div class="actions">
+            <button class="btn" type="submit" id="gGuardar">Guardar gasto</button>
+            <button class="btn ghost" type="button" id="gCancelar" hidden>Cancelar edición</button>
+          </div>
+        </form>
       </div>
-      <div class="card"><h2>Movimientos del mes</h2><ul class="list" id="listaGastos"></ul></div>`;
+
+      <div class="card"><h2>Movimientos del mes</h2><ul class="list" id="listaGastos"></ul></div>
+      <div class="card" id="cortesCard">
+        <h2>Cortes de meses anteriores</h2>
+        <ul class="list" id="listaCortes"></ul>
+      </div>
+      `;
 
     qs<HTMLInputElement>("#gFecha", el).value = todayISO();
     qs<HTMLInputElement>("#gMes", el).value = ui.mes;
@@ -168,6 +185,21 @@ export const gastosView: View = {
         this.update();
       }
     });
+    qs<HTMLButtonElement>("#balCerrar", el).addEventListener("click", (e) => {
+      const btn = e.currentTarget as HTMLButtonElement;
+      const yaCerrado = Boolean(store.byId("cortes", ui.mes));
+      if (!confirmTap(btn, yaCerrado ? "¿Actualizar el corte?" : `¿Cerrar ${fmtMonth(ui.mes)}?`)) return;
+      void attempt(() => cerrarMes(ui.mes), yaCerrado ? "Corte actualizado" : `Mes cerrado: ${fmtMonth(ui.mes)}`);
+    });
+    qs<HTMLButtonElement>("#balCompartir", el).addEventListener("click", () => void compartirResumen(ui.mes));
+    el.addEventListener("click", (e) => {
+      const ver = (e.target as HTMLElement).closest<HTMLElement>("[data-ver-mes]");
+      if (!ver?.dataset.verMes) return;
+      ui.mes = ver.dataset.verMes;
+      qs<HTMLInputElement>("#gMes", el).value = ui.mes;
+      this.update();
+      qs("#balanceCard", el).scrollIntoView({ behavior: "smooth", block: "start" });
+    });
     qs<HTMLSelectElement>("#gPrincipal", el).addEventListener("change", (e) => {
       void attempt(() => store.saveConfig({ monedaPrincipal: (e.target as HTMLSelectElement).value as Moneda }));
     });
@@ -179,10 +211,103 @@ export const gastosView: View = {
     const current = sel.value;
     sel.innerHTML = optionsHtml(kidOptions(store.data.hijos), current);
     renderHijosFijo();
+    renderBalance();
     renderFijos();
     renderResumen();
+    renderCortes();
   },
 };
+
+/* ------------------------------ Balance y cortes ------------------------------ */
+
+const balances = (ym: string): Balance[] =>
+  MONEDAS.map((m) => balanceDelMes({ gastos: store.data.gastos, tareas: store.data.tareas, fijos: store.data.fijos }, ym, m, todayISO()));
+
+const tieneDatos = (b: Balance): boolean => b.movimientos > 0 || b.pendientes.length > 0 || b.anterior > 0;
+const mesCorto = (ym: string): string => fmtMonth(ym).replace(/ de \d{4}$/, "");
+
+function renderBalance(): void {
+  const ym = ui.mes;
+  const corte = store.byId("cortes", ym);
+  const [prev] = mesesHasta(ym, 2);
+  qs("#balTitulo", root).textContent = `Balance de ${mesCorto(ym)}`;
+  qs("#balEstado", root).innerHTML = corte
+    ? `${chip(`Cerrado el ${fmtDate(corte.cerrado.slice(0, 10))}`, "ok")} <span class="small muted">Los números de abajo son los actuales; el corte guarda la foto de ese día.</span>`
+    : ym < monthOf(todayISO()) ? chip("Mes terminado sin cerrar", "warn") : "";
+  qs("#balCerrar", root).textContent = corte ? "Actualizar corte" : "Cerrar mes";
+
+  const bloques = balances(ym).filter(tieneDatos);
+  qs("#balMonedas", root).innerHTML = bloques.length
+    ? bloques.map((b) => {
+        const variacion = b.variacion === null ? "" : `<span class="${b.variacion > 0 ? "up" : "down"}">${b.variacion > 0 ? "▲" : "▼"} ${Math.abs(b.variacion)}% vs ${esc(mesCorto(prev))}</span>`;
+        return `<div class="subcard">
+          <div class="item-head"><h3>${b.moneda}</h3>${variacion}</div>
+          <div class="bal-total">${esc(numberFmt.format(b.total))} <span class="small muted">${b.moneda} gastados</span></div>
+          <div class="bal-grid">
+            <div><span class="dot dot-fijo"></span>Base <strong>${esc(numberFmt.format(b.base))}</strong></div>
+            <div><span class="dot dot-variable"></span>Variable <strong>${esc(numberFmt.format(b.variable))}</strong></div>
+            <div>Efectivo <strong>${esc(numberFmt.format(b.porMetodo.efectivo ?? 0))}</strong></div>
+            <div>Banca Remota <strong>${esc(numberFmt.format(b.porMetodo.banca_remota ?? 0))}</strong></div>
+          </div>
+          ${b.pendientes.length ? `<h3 class="sub">Falta por pagar · ${esc(numberFmt.format(b.pendiente))} ${b.moneda}</h3>
+            <ul class="list compact">${b.pendientes.map((p) => `<li><div class="grow item-head"><span>${esc(p.titulo)}${p.fecha ? ` <span class="small muted">· ${esc(fmtDate(p.fecha))}</span>` : ""}</span><span class="amount">${p.estimado ? "≈" : ""}${esc(numberFmt.format(p.monto))}</span></div></li>`).join("")}</ul>` : ""}
+          ${b.mayores.length ? `<h3 class="sub">Mayores gastos variables</h3>
+            <ul class="list compact">${b.mayores.map((g) => `<li><div class="grow item-head"><span>${esc(g.descripcion || g.categoria)} <span class="small muted">· ${esc(g.categoria)}</span></span><span class="amount">${esc(numberFmt.format(g.monto))}</span></div></li>`).join("")}</ul>` : ""}
+        </div>`;
+      }).join("")
+    : `<div class="empty">Sin gastos ni pagos pendientes en ${esc(fmtMonth(ym))}.</div>`;
+}
+
+async function cerrarMes(ym: string): Promise<void> {
+  const [cup, usd] = balances(ym);
+  await store.put("cortes", { id: ym, ym, cerrado: new Date().toISOString(), monedas: { CUP: resumenDe(cup), USD: resumenDe(usd) }, nota: "" });
+}
+
+function renderCortes(): void {
+  const cortes = [...store.data.cortes].sort((a, b) => b.ym.localeCompare(a.ym));
+  qs("#cortesCard", root).hidden = !cortes.length;
+  qs("#listaCortes", root).innerHTML = cortes.map((c, i) => {
+    const anterior = cortes[i + 1];
+    const lineas = MONEDAS.filter((m) => c.monedas[m]?.total || c.monedas[m]?.pendiente).map((m) => {
+      const r = c.monedas[m];
+      const prevTotal = anterior?.monedas[m]?.total;
+      const delta = prevTotal ? Math.round(((r.total - prevTotal) / prevTotal) * 100) : null;
+      return `<div class="small">${m}: <strong>${esc(numberFmt.format(r.total))}</strong> · base ${esc(numberFmt.format(r.base))} · variable ${esc(numberFmt.format(r.variable))}${delta === null ? "" : ` · <span class="${delta > 0 ? "up" : "down"}">${delta > 0 ? "▲" : "▼"} ${Math.abs(delta)}%</span>`}</div>`;
+    }).join("");
+    return `<li><div class="grow">
+      <div class="item-head"><span class="title">${esc(fmtMonth(c.ym))}</span><span class="small muted">cerrado ${esc(fmtDate(c.cerrado.slice(0, 10)))}</span></div>
+      ${lineas || `<div class="small muted">Sin gastos.</div>`}
+      <div class="item-foot"><span class="item-actions"><button class="icon-btn accent" type="button" data-ver-mes="${esc(c.ym)}">Ver</button>${delBtn("cortes", c.id, "Reabrir")}</span></div>
+    </div></li>`;
+  }).join("");
+}
+
+/** Texto del balance para compartir (WhatsApp, notas…). */
+function textoResumen(ym: string): string {
+  const lineas = [`Balance de ${fmtMonth(ym)}`];
+  for (const b of balances(ym).filter(tieneDatos)) {
+    lineas.push("", `${b.moneda}: ${fmtMoney(b.total, b.moneda)} gastados${b.variacion === null ? "" : ` (${b.variacion > 0 ? "+" : ""}${b.variacion}% vs mes anterior)`}`);
+    lineas.push(`• Base: ${numberFmt.format(b.base)} · Variable: ${numberFmt.format(b.variable)}`);
+    lineas.push(`• Efectivo: ${numberFmt.format(b.porMetodo.efectivo ?? 0)} · Banca Remota: ${numberFmt.format(b.porMetodo.banca_remota ?? 0)}`);
+    if (b.categorias.length) lineas.push(`• Por categoría: ${b.categorias.slice(0, 5).map(([c, v]) => `${c} ${numberFmt.format(v)}`).join(", ")}`);
+    if (b.pendientes.length) lineas.push(`• Falta por pagar: ${numberFmt.format(b.pendiente)} (${b.pendientes.map((p) => p.titulo).join(", ")})`);
+  }
+  return lineas.join("\n");
+}
+
+async function compartirResumen(ym: string): Promise<void> {
+  const text = textoResumen(ym);
+  try {
+    if (navigator.share) {
+      await navigator.share({ title: `Balance de ${fmtMonth(ym)}`, text });
+      return;
+    }
+    await navigator.clipboard.writeText(text);
+    toast("Resumen copiado");
+  } catch (e) {
+    if ((e as Error)?.name !== "AbortError") toast("No se pudo compartir. Inténtalo de nuevo.");
+  }
+}
 
 /* ------------------------------ Gasto (crear / editar) ------------------------------ */
 

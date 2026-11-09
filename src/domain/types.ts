@@ -108,6 +108,24 @@ export interface GastoFijo extends Entity {
   activo: boolean;
 }
 
+/** Resumen de una moneda en un corte de mes. */
+export interface ResumenMoneda {
+  total: number;
+  base: number;
+  variable: number;
+  pendiente: number;
+  movimientos: number;
+  categorias: Array<[string, number]>;
+}
+
+/** Corte (cierre) de un mes: foto del balance para comparar meses. id = "YYYY-MM". */
+export interface Corte extends Entity {
+  ym: string;
+  cerrado: string;
+  monedas: Record<Moneda, ResumenMoneda>;
+  nota: string;
+}
+
 /** Regla aprendida de una corrección: patrón de texto → categoría. */
 export interface Regla extends Entity {
   patron: string;
@@ -142,10 +160,11 @@ export interface Collections {
   reglas: Regla;
   bloques: Bloque;
   fijos: GastoFijo;
+  cortes: Corte;
 }
 
 export type CollectionName = keyof Collections;
-export const COLLECTION_NAMES: readonly CollectionName[] = ["hijos", "tareas", "gastos", "actividades", "deberes", "reglas", "bloques", "fijos"];
+export const COLLECTION_NAMES: readonly CollectionName[] = ["hijos", "tareas", "gastos", "actividades", "deberes", "reglas", "bloques", "fijos", "cortes"];
 
 export const DEFAULT_CONFIG: Config = {
   monedaPrincipal: "CUP",
