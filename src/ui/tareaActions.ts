@@ -2,13 +2,13 @@
  * Completar / reabrir tareas. Si la tarea tiene costo, se pregunta cuánto se pagó y se crea el gasto;
  * si se repite, se crea la siguiente de la serie (con su bloque de agenda, si lo tenía).
  */
-import { METODOS, MONEDAS } from "../domain/catalog";
-import { fmtDate, fmtMonth, monthOf, todayISO } from "../domain/dates";
+import { CATEGORIAS, METODOS, MONEDAS } from "../domain/catalog";
+import { fmtDate, fmtMonth, monthOf, toISODate, todayISO } from "../domain/dates";
 import { enPeriodoActual } from "../domain/periodos";
-import { planCompletar, type Pago } from "../domain/tareas";
+import { gastoDeTarea, planCompletar, type Pago } from "../domain/tareas";
 import type { Metodo, Moneda, Tarea } from "../domain/types";
 import { store } from "../data/store";
-import { attempt, esc, fmtMoney, qs, toast } from "./dom";
+import { attempt, esc, fmtMoney, optionsHtml, qs, toast } from "./dom";
 import { openSheet } from "./sheet";
 
 /** Importes pagados anteriormente en la misma serie de tareas, del más antiguo al más reciente. */
@@ -137,6 +137,61 @@ function pedirDeshacer(t: Tarea, onCancel: () => void): void {
     sheet.close();
     void attempt(() => reabrir(t, Boolean(borrar)), borrar ? "Pago deshecho" : "Tarea pendiente de nuevo");
   });
+}
+
+/** Día (local) en que se completó la tarea; si no consta, hoy. */
+const fechaCompletada = (t: Tarea): string => (t.completada ? toISODate(new Date(t.completada)) : todayISO());
+
+async function vincularGasto(t: Tarea, pago: Pago, categoria?: string): Promise<void> {
+  const gasto = await store.add("gastos", gastoDeTarea(t, pago, fechaCompletada(t), categoria));
+  await store.update("tareas", t.id, { gastoId: gasto.id });
+}
+
+/** Hoja para registrar el gasto de una tarea ya hecha (con la fecha en que se completó). */
+export function registrarGastoDeHecha(t: Tarea): void {
+  const costo = t.costo;
+  const valores = { moneda: (costo?.moneda ?? store.config.monedaPrincipal) as Moneda, metodo: (costo?.metodo ?? "efectivo") as Metodo };
+  const sheet = openSheet({
+    title: "Registrar gasto",
+    subtitle: `${t.titulo} · hecha el ${fmtDate(fechaCompletada(t))}`,
+    body: `
+      <form id="rgForm" autocomplete="off" class="stack">
+        <label for="rgMonto">Importe
+          <input id="rgMonto" class="big-input" type="number" inputmode="decimal" min="0.01" step="0.01" value="${costo && costo.tipo === "fijo" ? esc(costo.monto) : ""}" placeholder="${esc(costo?.monto ?? "")}" required>
+        </label>
+        ${seg("moneda", MONEDAS.map((m) => [m, m]), valores.moneda)}
+        ${seg("metodo", Object.entries(METODOS), valores.metodo)}
+        <label for="rgCategoria">Categoría <select id="rgCategoria">${optionsHtml(CATEGORIAS.map((c) => [c, c]), costo?.categoria ?? "Otros")}</select></label>
+        <p class="small muted">Se registra con fecha ${esc(fmtDate(fechaCompletada(t)))} como gasto ${t.repetir ? "base (recurrente)" : "variable"}.</p>
+        <button class="btn block" type="submit">Registrar gasto</button>
+      </form>`,
+  });
+  const form = qs<HTMLFormElement>("#rgForm", sheet.el);
+  form.addEventListener("click", (e) => {
+    const b = (e.target as HTMLElement).closest<HTMLButtonElement>("[data-seg]");
+    if (!b) return;
+    const k = b.dataset.seg as "moneda" | "metodo";
+    (valores as Record<string, string>)[k] = b.dataset.value ?? "";
+    form.querySelectorAll<HTMLButtonElement>(`[data-seg="${k}"]`).forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+  });
+  form.addEventListener("submit", (e) => {
+    e.preventDefault();
+    const monto = Math.round(Number(qs<HTMLInputElement>("#rgMonto", form).value) * 100) / 100;
+    if (!(monto > 0)) return toast("Indica el importe.");
+    sheet.close();
+    void attempt(() => vincularGasto(t, { monto, ...valores }, qs<HTMLSelectElement>("#rgCategoria", form).value), `Gasto registrado: ${fmtMoney(monto, valores.moneda)}`);
+  });
+  requestAnimationFrame(() => qs<HTMLInputElement>("#rgMonto", form).focus());
+}
+
+/** Registra de una vez el gasto de las tareas hechas con costo fijo; devuelve cuántas. */
+export async function registrarTodosLosFijos(tareas: readonly Tarea[]): Promise<number> {
+  const conCostoFijo = tareas.filter((t) => t.costo?.tipo === "fijo");
+  for (const t of conCostoFijo) {
+    const c = t.costo!;
+    await vincularGasto(t, { monto: c.monto, moneda: c.moneda, metodo: c.metodo });
+  }
+  return conCostoFijo.length;
 }
 
 /** Punto de entrada del check de una tarea (desde cualquier lista). */

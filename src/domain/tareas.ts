@@ -35,6 +35,29 @@ export function promedioReciente(montos: readonly number[], n = 3): number | nul
   return Math.round((ultimos.reduce((a, b) => a + b, 0) / ultimos.length) * 100) / 100;
 }
 
+/**
+ * Gasto que corresponde a pagar una tarea: base (fijo) si se repite, variable si no.
+ * Sin costo previsto se usa la categoría indicada (o «Otros»).
+ */
+export function gastoDeTarea(t: Tarea, pago: Pago, fecha: ISODate, categoria?: string): NuevoGasto {
+  return {
+    monto: Math.round(pago.monto * 100) / 100,
+    moneda: pago.moneda,
+    metodo: pago.metodo,
+    categoria: categoria ?? t.costo?.categoria ?? "Otros",
+    descripcion: t.titulo,
+    fecha,
+    hijoId: t.hijoIds.length === 1 ? t.hijoIds[0] : null,
+    origen: "tarea",
+    naturaleza: t.repetir ? "fijo" : "variable",
+    fijoId: null,
+  };
+}
+
+/** Tareas hechas que no tienen gasto registrado (para registrarlo después). */
+export const hechasSinGasto = (tareas: readonly Tarea[], existeGasto: (id: string) => boolean): Tarea[] =>
+  tareas.filter((t) => t.estado === "hecha" && !(t.gastoId && existeGasto(t.gastoId)));
+
 export interface PlanCompletar {
   /** Cambios a aplicar a la tarea (gastoId/siguienteId se rellenan al persistir). */
   patch: Pick<Tarea, "estado" | "completada">;
@@ -48,20 +71,7 @@ export interface PlanCompletar {
  * - Si se repite y aún no existe la siguiente: la próxima tarea de la serie, con el mismo costo previsto.
  */
 export function planCompletar(t: Tarea, hoy: ISODate, ahoraISO: string, pago: Pago | null, historial: readonly number[] = []): PlanCompletar {
-  const gasto: NuevoGasto | null = pago && pago.monto > 0
-    ? {
-        monto: Math.round(pago.monto * 100) / 100,
-        moneda: pago.moneda,
-        metodo: pago.metodo,
-        categoria: t.costo?.categoria ?? "Otros",
-        descripcion: t.titulo,
-        fecha: hoy,
-        hijoId: t.hijoIds.length === 1 ? t.hijoIds[0] : null,
-        origen: "tarea",
-        naturaleza: t.repetir ? "fijo" : "variable",
-        fijoId: null,
-      }
-    : null;
+  const gasto: NuevoGasto | null = pago && pago.monto > 0 ? gastoDeTarea(t, pago, hoy) : null;
 
   // Importe estimado: la próxima toma el promedio de los últimos pagos de la serie (incluido este).
   const pagos = gasto ? [...historial, gasto.monto] : [...historial];

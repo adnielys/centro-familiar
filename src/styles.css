@@ -270,6 +270,7 @@ h3.sub { font-size: 14px; margin-top: 6px; }
 .list.compact li { padding: 6px 0; font-size: 14px; }
 .up { color: var(--bad); font-size: 13px; font-weight: 600; }
 .down { color: var(--ok); font-size: 13px; font-weight: 600; }
+.notice { display: grid; gap: 10px; padding: 12px; border-radius: 12px; background: color-mix(in srgb, var(--warn) 12%, var(--surface)); color: var(--ink); font-size: 14px; }
 .item-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
 .item-head .amount { text-align: right; }
 .item-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin-top: 6px; }

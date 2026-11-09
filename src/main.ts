@@ -12,7 +12,7 @@ import { attempt, confirmTap, qs, toast } from "./ui/dom";
 import { pagarFijo } from "./ui/fijosActions";
 import { ICONS } from "./ui/icons";
 import { startRouter } from "./ui/router";
-import { alternarTarea } from "./ui/tareaActions";
+import { alternarTarea, registrarGastoDeHecha } from "./ui/tareaActions";
 import { abrirTareaSheet } from "./ui/tareaSheet";
 import { agendaView, agendarTarea } from "./ui/views/agenda";
 import { ajustesView } from "./ui/views/ajustes";
@@ -58,6 +58,11 @@ function bindEditarTarea(): void {
     const btn = (e.target as HTMLElement).closest<HTMLElement>("[data-edit-tarea]");
     const tarea = btn ? store.byId("tareas", btn.dataset.editTarea) : undefined;
     if (tarea) abrirTareaSheet(tarea);
+  });
+  document.addEventListener("click", (e) => {
+    const btn = (e.target as HTMLElement).closest<HTMLElement>("[data-gasto-tarea]");
+    const tarea = btn ? store.byId("tareas", btn.dataset.gastoTarea) : undefined;
+    if (tarea) registrarGastoDeHecha(tarea);
   });
 }
 

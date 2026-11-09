@@ -5,13 +5,16 @@
 import { MONEDAS } from "../../domain/catalog";
 import { fmtMonth, todayISO } from "../../domain/dates";
 import { agruparPorMes, enPeriodoActual, finDeMes } from "../../domain/periodos";
+import { hechasSinGasto } from "../../domain/tareas";
+import { store } from "../../data/store";
 import type { Tarea } from "../../domain/types";
-import { emptyLi, esc, numberFmt, qs } from "../dom";
+import { attempt, confirmTap, emptyLi, esc, numberFmt, qs } from "../dom";
 import { ICONS } from "../icons";
 import { tareaItem } from "../items";
 import type { View } from "../router";
 import { tareasPorEstado } from "../selectors";
 import { abrirTareaSheet } from "../tareaSheet";
+import { registrarTodosLosFijos } from "../tareaActions";
 
 type Filtro = "ahora" | "proximas" | "hechas";
 const FILTROS: Array<[Filtro, string]> = [["ahora", "Ahora"], ["proximas", "Próximas"], ["hechas", "Hechas"]];
@@ -33,12 +36,21 @@ export const tareasView: View = {
           ${FILTROS.map(([f, l]) => `<button type="button" data-filter="${f}" aria-pressed="${f === filtro}">${l} <span class="count" data-count="${f}"></span></button>`).join("")}
         </div>
         <p class="small muted" id="tareasAyuda"></p>
+        <div class="notice" id="sinGasto" hidden></div>
         <ul class="list" id="listaTareas"></ul>
         <button class="btn ghost block" type="button" id="tNueva">${ICONS.mas} Nueva tarea</button>
       </div>`;
 
     qs<HTMLButtonElement>("#tNueva", el).addEventListener("click", () => abrirTareaSheet());
     el.addEventListener("click", (e) => {
+      const todos = (e.target as HTMLElement).closest<HTMLButtonElement>("[data-registrar-todos]");
+      if (todos) {
+        const pendientes = hechasSinGasto(store.data.tareas, (id) => Boolean(store.byId("gastos", id)));
+        const n = pendientes.filter((t) => t.costo?.tipo === "fijo").length;
+        if (!confirmTap(todos, `¿Registrar ${n} ${n === 1 ? "gasto" : "gastos"}?`)) return;
+        void attempt(() => registrarTodosLosFijos(pendientes), `${n} ${n === 1 ? "gasto registrado" : "gastos registrados"}`);
+        return;
+      }
       const f = (e.target as HTMLElement).closest<HTMLElement>("[data-filter]");
       if (!f) return;
       filtro = f.dataset.filter as Filtro;
@@ -63,6 +75,7 @@ export const tareasView: View = {
       hechas: "Las últimas tareas completadas.",
     }[filtro];
 
+    renderSinGasto();
     const lista = qs("#listaTareas", root);
     if (filtro === "ahora") {
       lista.innerHTML = ahora.length ? ahora.map((t) => tareaItem(t, today, { agendar: true, editar: true })).join("") : emptyLi("Nada pendiente por ahora. Toca + para crear una tarea.");
@@ -75,6 +88,17 @@ export const tareasView: View = {
     }
   },
 };
+
+/** Aviso en «Hechas»: tareas completadas sin gasto registrado. */
+function renderSinGasto(): void {
+  const box = qs("#sinGasto", root);
+  const sinGasto = hechasSinGasto(store.data.tareas, (id) => Boolean(store.byId("gastos", id)));
+  const conCosto = sinGasto.filter((t) => t.costo?.tipo === "fijo");
+  box.hidden = filtro !== "hechas" || !sinGasto.length;
+  if (box.hidden) return;
+  box.innerHTML = `<span>${sinGasto.length} ${sinGasto.length === 1 ? "tarea hecha no tiene" : "tareas hechas no tienen"} gasto registrado. Toca «Registrar gasto» en cada una${conCosto.length ? "," : "."}</span>
+    ${conCosto.length ? `<button class="btn" type="button" data-registrar-todos>Registrar todos (${conCosto.length} con costo fijo)</button>` : ""}`;
+}
 
 function renderTiles(ahora: readonly Tarea[], today: string): void {
   const fin = finDeMes(today);

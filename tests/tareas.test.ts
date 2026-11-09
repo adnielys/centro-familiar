@@ -80,3 +80,18 @@ describe("importe estimado (luz, agua…)", () => {
     expect(planCompletar(t, "2026-11-08", AHORA, { monto: 1450, moneda: "CUP", metodo: "efectivo" }).siguiente?.costo?.monto).toBe(1500);
   });
 });
+
+import { gastoDeTarea, hechasSinGasto } from "../src/domain/tareas";
+
+describe("gasto de tareas ya hechas", () => {
+  it("usa la fecha indicada y la categoría elegida si la tarea no tenía costo", () => {
+    const t = tarea({ titulo: "Pagar Dilsi", repetir: "mensual", hijoIds: [] });
+    expect(gastoDeTarea(t, { monto: 100, moneda: "USD", metodo: "efectivo" }, "2026-11-03", "Hogar")).toMatchObject({
+      monto: 100, moneda: "USD", categoria: "Hogar", fecha: "2026-11-03", naturaleza: "fijo", descripcion: "Pagar Dilsi",
+    });
+  });
+  it("detecta hechas sin gasto (o con un gasto que ya no existe)", () => {
+    const ts = [tarea({ id: "a", estado: "hecha" }), tarea({ id: "b", estado: "hecha", gastoId: "g1" }), tarea({ id: "c", estado: "hecha", gastoId: "borrado" }), tarea({ id: "d" })];
+    expect(hechasSinGasto(ts, (id) => id === "g1").map((t) => t.id)).toEqual(["a", "c"]);
+  });
+});

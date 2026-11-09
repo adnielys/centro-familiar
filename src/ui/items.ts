@@ -25,6 +25,7 @@ export function tareaItem(t: Tarea, today: ISODate, opts: { agendar?: boolean; e
         ${costo}
         <span class="item-actions">
           ${!done && opts.agendar ? `<button class="icon-btn accent" type="button" data-agendar="${esc(t.id)}">Agendar</button>` : ""}
+          ${done && !gasto ? `<button class="icon-btn accent" type="button" data-gasto-tarea="${esc(t.id)}">Registrar gasto</button>` : ""}
           ${opts.editar ? `<button class="icon-btn" type="button" data-edit-tarea="${esc(t.id)}">Editar</button>` : ""}
           ${delBtn("tareas", t.id)}
         </span>
