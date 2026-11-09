@@ -271,6 +271,14 @@ h3.sub { font-size: 14px; margin-top: 6px; }
 .up { color: var(--bad); font-size: 13px; font-weight: 600; }
 .down { color: var(--ok); font-size: 13px; font-weight: 600; }
 .notice { display: grid; gap: 10px; padding: 12px; border-radius: 12px; background: color-mix(in srgb, var(--warn) 12%, var(--surface)); color: var(--ink); font-size: 14px; }
+.summary-h2 { font-size: 18px; font-weight: 650; font-family: var(--font-display); color: var(--ink); list-style: none; display: flex; align-items: center; gap: 8px; }
+.summary-h2::-webkit-details-marker { display: none; }
+.summary-h2::before { content: "+"; display: inline-grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; background: var(--accent-soft); color: var(--accent); font-size: 18px; }
+details[open] > .summary-h2::before { content: "−"; }
+.pager { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.pager:empty { display: none; }
+.pager .btn[disabled] { opacity: .35; }
+input[type="search"] { -webkit-appearance: none; appearance: none; }
 .item-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
 .item-head .amount { text-align: right; }
 .item-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin-top: 6px; }

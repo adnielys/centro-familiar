@@ -13,6 +13,7 @@ import { gastoItem } from "../items";
 import { ICONS } from "../icons";
 import type { View } from "../router";
 import { gastosDelMes, sumarPor, totalEn } from "../selectors";
+import { buscarGastos, paginar } from "../../domain/busqueda";
 
 let root: HTMLElement;
 const ui = {
@@ -22,7 +23,10 @@ const ui = {
   naturaleza: "variable" as Naturaleza,
   editandoGasto: null as string | null,
   editandoFijo: null as string | null,
+  buscar: "",
+  pagina: 1,
 };
+const POR_PAGINA = 15;
 
 const segButtons = (attr: string, entries: Array<[string, string]>, selected: string): string =>
   entries.map(([v, l]) => `<button type="button" data-${attr}="${v}" aria-pressed="${v === selected}">${esc(l)}</button>`).join("");
@@ -113,7 +117,8 @@ export const gastosView: View = {
       </div>
 
       <div class="card" id="gastoCard">
-        <h2 id="gastoTitulo">Registrar gasto</h2>
+        <details id="detGasto">
+        <summary class="summary-h2"><span id="gastoTitulo">Registrar gasto</span></summary>
         <form id="formGasto" autocomplete="off">
           <div class="row">
             <label for="gMonto">Monto <input id="gMonto" name="monto" type="number" inputmode="decimal" min="0.01" step="0.01" required placeholder="350"></label>
@@ -134,9 +139,15 @@ export const gastosView: View = {
             <button class="btn ghost" type="button" id="gCancelar" hidden>Cancelar edición</button>
           </div>
         </form>
+        </details>
       </div>
 
-      <div class="card"><h2>Movimientos del mes</h2><ul class="list" id="listaGastos"></ul></div>
+      <div class="card" id="movCard">
+        <div class="card-head"><h2 id="movTitulo">Movimientos del mes</h2><span class="small muted" id="movTotal"></span></div>
+        <input id="movBuscar" type="search" placeholder="Buscar: fogón, Alain, 300, banca…" aria-label="Buscar movimientos" autocomplete="off">
+        <ul class="list" id="listaGastos"></ul>
+        <div class="pager" id="movPager"></div>
+      </div>
       <div class="card" id="cortesCard">
         <h2>Cortes de meses anteriores</h2>
         <ul class="list" id="listaCortes"></ul>
@@ -182,8 +193,21 @@ export const gastosView: View = {
       const v = (e.target as HTMLInputElement).value;
       if (v) {
         ui.mes = v;
+        ui.pagina = 1;
         this.update();
       }
+    });
+    qs<HTMLInputElement>("#movBuscar", el).addEventListener("input", (e) => {
+      ui.buscar = (e.target as HTMLInputElement).value;
+      ui.pagina = 1;
+      renderMovimientos();
+    });
+    qs("#movPager", el).addEventListener("click", (e) => {
+      const b = (e.target as HTMLElement).closest<HTMLButtonElement>("[data-pagina]");
+      if (!b) return;
+      ui.pagina = Number(b.dataset.pagina);
+      renderMovimientos();
+      qs("#movCard", el).scrollIntoView({ behavior: "smooth", block: "start" });
     });
     qs<HTMLButtonElement>("#balCerrar", el).addEventListener("click", (e) => {
       const btn = e.currentTarget as HTMLButtonElement;
@@ -196,6 +220,7 @@ export const gastosView: View = {
       const ver = (e.target as HTMLElement).closest<HTMLElement>("[data-ver-mes]");
       if (!ver?.dataset.verMes) return;
       ui.mes = ver.dataset.verMes;
+      ui.pagina = 1;
       qs<HTMLInputElement>("#gMes", el).value = ui.mes;
       this.update();
       qs("#balanceCard", el).scrollIntoView({ behavior: "smooth", block: "start" });
@@ -217,6 +242,37 @@ export const gastosView: View = {
     renderCortes();
   },
 };
+
+/* ------------------------------ Movimientos (buscar + paginar) ------------------------------ */
+
+/** Sin búsqueda: los del mes elegido. Con búsqueda: en todos los meses, más recientes primero. */
+function renderMovimientos(): void {
+  const buscando = ui.buscar.trim().length > 0;
+  const base = buscando
+    ? [...store.data.gastos].sort((a, b) => b.fecha.localeCompare(a.fecha) || (b.creado ?? "").localeCompare(a.creado ?? ""))
+    : gastosDelMes(ui.mes);
+  const resultados = buscarGastos(base, ui.buscar, (id) => store.byId("hijos", id)?.nombre ?? "");
+  const pag = paginar(resultados, ui.pagina, POR_PAGINA);
+  ui.pagina = pag.pagina;
+
+  qs("#movTitulo", root).textContent = buscando ? "Resultados" : "Movimientos del mes";
+  qs("#movTotal", root).textContent = pag.total ? `${pag.total} ${pag.total === 1 ? "movimiento" : "movimientos"}` : "";
+
+  let lastDate: string | null = null;
+  qs("#listaGastos", root).innerHTML = pag.items.length
+    ? pag.items.map((g) => {
+        const head = g.fecha !== lastDate ? `<li class="date-head">${esc(fmtDate(g.fecha))}${g.fecha.slice(0, 4) !== todayISO().slice(0, 4) ? ` ${g.fecha.slice(0, 4)}` : ""}</li>` : "";
+        lastDate = g.fecha;
+        return head + gastoItem(g, { fecha: false, editar: true });
+      }).join("")
+    : emptyLi(buscando ? "Nada coincide con la búsqueda." : "No hay gastos en este mes.");
+
+  qs("#movPager", root).innerHTML = pag.paginas > 1
+    ? `<button class="btn ghost" type="button" data-pagina="${pag.pagina - 1}" ${pag.pagina === 1 ? "disabled" : ""}>‹ Anterior</button>
+       <span class="small muted">${pag.desde}–${pag.hasta} de ${pag.total}</span>
+       <button class="btn ghost" type="button" data-pagina="${pag.pagina + 1}" ${pag.pagina === pag.paginas ? "disabled" : ""}>Siguiente ›</button>`
+    : "";
+}
 
 /* ------------------------------ Balance y cortes ------------------------------ */
 
@@ -333,6 +389,7 @@ function editarGasto(g: Gasto): void {
   set("hijoId", g.hijoId ?? "");
   set("descripcion", g.descripcion);
   renderToggles();
+  qs<HTMLDetailsElement>("#detGasto", root).open = true;
   qs("#gastoTitulo", root).textContent = "Editar gasto";
   qs("#gGuardar", root).textContent = "Guardar cambios";
   qs("#gCancelar", root).hidden = false;
@@ -345,6 +402,7 @@ function salirEdicionGasto(): void {
   const form = qs<HTMLFormElement>("#formGasto", root);
   form.reset();
   qs<HTMLInputElement>("#gFecha", root).value = todayISO();
+  qs<HTMLDetailsElement>("#detGasto", root).open = false;
   qs("#gastoTitulo", root).textContent = "Registrar gasto";
   qs("#gGuardar", root).textContent = "Guardar gasto";
   qs("#gCancelar", root).hidden = true;
@@ -529,12 +587,5 @@ function renderResumen(): void {
   const porHijo = sumarPor(enBase.filter((g) => g.hijoId), (g) => store.byId("hijos", g.hijoId)?.nombre ?? "Sin asignar");
   qs("#gastoHijos", root).innerHTML = Object.keys(porHijo).length ? bars(porHijo, cur) : `<div class="empty">Ningún gasto asignado a un hijo este mes.</div>`;
 
-  let lastDate: string | null = null;
-  qs("#listaGastos", root).innerHTML = delMes.length
-    ? delMes.map((g) => {
-        const head = g.fecha !== lastDate ? `<li class="date-head">${esc(fmtDate(g.fecha))}</li>` : "";
-        lastDate = g.fecha;
-        return head + gastoItem(g, { fecha: false, editar: true });
-      }).join("")
-    : emptyLi("No hay gastos en este mes.");
+  renderMovimientos();
 }
