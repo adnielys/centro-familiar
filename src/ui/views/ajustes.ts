@@ -1,10 +1,12 @@
 import { DIAS_CORTOS, MONEDAS } from "../../domain/catalog";
-import { todayISO } from "../../domain/dates";
+import { tasaActual } from "../../domain/cambio";
+import { fmtDate, todayISO } from "../../domain/dates";
 import type { Moneda } from "../../domain/types";
 import { exportBackup, importBackup } from "../../data/backup";
 import { store } from "../../data/store";
 import { googleCalendar } from "../../integrations/googleCalendar";
-import { attempt, downloadBlob, formValues, optionsHtml, qs, toast } from "../dom";
+import { actualizarTasaDeHoy, guardarTasaManual } from "../../integrations/eltoque";
+import { attempt, downloadBlob, esc, formValues, numberFmt, optionsHtml, qs, toast } from "../dom";
 import type { View } from "../router";
 
 let root: HTMLElement;
@@ -32,6 +34,32 @@ export const ajustesView: View = {
           </div>
           <button class="btn" type="submit">Guardar horario</button>
         </form>
+      </div>
+
+      <div class="card" id="cambioCard">
+        <h2>Tipo de cambio (USD → CUP)</h2>
+        <div id="tasaEstado"></div>
+        <form id="formTasaManual" autocomplete="off" class="row">
+          <label for="tasaManual">Tasa de hoy: 1 USD = … CUP <input id="tasaManual" type="number" inputmode="decimal" min="1" step="0.01" placeholder="470"></label>
+          <button class="btn ghost" type="submit">Guardar tasa manual</button>
+        </form>
+        <details id="detEltoque">
+          <summary>Actualizar sola desde elTOQUE</summary>
+          <div class="stack">
+            <p class="small muted">1) Pide tu token gratis en <a href="https://tasas-token.eltoque.com/" target="_blank" rel="noopener">tasas-token.eltoque.com</a>. 2) Pégalo aquí. La app consulta la tasa de elTOQUE una vez al día al abrirse. Si tu teléfono no puede conectar directo, usa un proxy (instrucciones en el README del proyecto) y deja el token solo en el proxy.</p>
+            <form id="formEltoque" autocomplete="off" class="stack">
+              <label for="eltToken">Token de elTOQUE <input id="eltToken" name="token" type="password" spellcheck="false" autocomplete="off" placeholder="eyJhbGciOi…"></label>
+              <label for="eltProxy">URL de proxy (opcional) <input id="eltProxy" name="proxy" type="url" spellcheck="false" placeholder="https://tasas.tu-cuenta.workers.dev"></label>
+              <div class="actions">
+                <button class="btn" type="submit">Guardar</button>
+                <button class="btn ghost" type="button" id="eltActualizar">Actualizar ahora</button>
+              </div>
+              <div class="small" id="eltEstado" role="status"></div>
+            </form>
+          </div>
+        </details>
+        <ul class="list compact" id="tasasRecientes"></ul>
+        <p class="small muted">Cada gasto se convierte con la tasa del día en que lo hiciste. Tasa automática: TRMI de <a href="https://eltoque.com/tasas-de-cambio-de-moneda-en-cuba-hoy" target="_blank" rel="noopener">elTOQUE</a>.</p>
       </div>
 
       <div class="card">
@@ -82,6 +110,33 @@ export const ajustesView: View = {
       void attempt(() => store.saveConfig({ jornada: { inicio: v.jInicio, fin: v.jFin }, trabajo: { activo, dias, inicio: v.wInicio, fin: v.wFin } }), "Horario guardado");
     });
 
+    qs<HTMLFormElement>("#formTasaManual", el).addEventListener("submit", (e) => {
+      e.preventDefault();
+      const usd = Number(qs<HTMLInputElement>("#tasaManual", el).value);
+      if (!(usd > 0)) return toast("Escribe cuántos CUP vale 1 USD.");
+      void attempt(() => guardarTasaManual(usd), `Tasa guardada: 1 USD = ${numberFmt.format(usd)} CUP`).then(() => {
+        qs<HTMLInputElement>("#tasaManual", el).value = "";
+      });
+    });
+    qs<HTMLFormElement>("#formEltoque", el).addEventListener("submit", (e) => {
+      e.preventDefault();
+      const v = formValues(e.target as HTMLFormElement);
+      if (v.proxy && !/^https:\/\//.test(v.proxy)) return toast("La URL del proxy debe empezar por https://");
+      void attempt(() => store.saveConfig({ cambio: { eltoqueToken: v.token, proxyUrl: v.proxy } }), "Configuración de elTOQUE guardada");
+    });
+    qs<HTMLButtonElement>("#eltActualizar", el).addEventListener("click", async () => {
+      const estado = qs("#eltEstado", el);
+      estado.className = "small muted";
+      estado.textContent = "Consultando elTOQUE…";
+      try {
+        const usd = await actualizarTasaDeHoy();
+        estado.className = "small ok-text";
+        estado.textContent = `✓ 1 USD = ${numberFmt.format(usd)} CUP (elTOQUE, hoy)`;
+      } catch (err) {
+        estado.className = "small bad-text";
+        estado.textContent = err instanceof Error ? err.message : "No se pudo consultar elTOQUE.";
+      }
+    });
     qs<HTMLSelectElement>("#aMoneda", el).addEventListener("change", (e) => {
       void attempt(() => store.saveConfig({ monedaPrincipal: (e.target as HTMLSelectElement).value as Moneda }), "Moneda guardada");
     });
@@ -115,6 +170,7 @@ export const ajustesView: View = {
   },
 
   update() {
+    renderTasas();
     const { googleClientId } = store.config;
     qs("#gEstado", root).innerHTML = !googleClientId
       ? `<span class="muted">No configurado.</span>`
@@ -125,6 +181,17 @@ export const ajustesView: View = {
     qs("#installState", root).textContent = standalone ? "✓ Estás usando la app instalada." : "Ahora mismo la estás usando desde el navegador.";
   },
 };
+
+function renderTasas(): void {
+  const hoy = todayISO();
+  const actual = tasaActual(store.data.tasas, hoy);
+  qs("#tasaEstado", root).innerHTML = actual
+    ? `<div class="bal-total">1 USD = ${esc(numberFmt.format(actual.usd))} <span class="small muted">CUP</span></div>
+       <div class="small muted">${actual.fuente === "eltoque" ? "Fuente: elTOQUE (TRMI)" : "Tasa manual"} · ${actual.fecha === hoy ? "hoy" : esc(fmtDate(actual.fecha))}${actual.fecha !== hoy ? " · no hay tasa de hoy, se usa la última" : ""}</div>`
+    : `<p class="small muted">Aún no hay tasa. Escríbela a mano o configura elTOQUE para ver tus gastos sumados en una sola moneda.</p>`;
+  const recientes = [...store.data.tasas].sort((a, b) => b.fecha.localeCompare(a.fecha)).slice(0, 7);
+  qs("#tasasRecientes", root).innerHTML = recientes.map((t) => `<li><div class="grow item-head"><span>${esc(fmtDate(t.fecha))} <span class="small muted">· ${t.fuente === "eltoque" ? "elTOQUE" : "manual"}</span></span><span class="amount">${esc(numberFmt.format(t.usd))} CUP</span></div></li>`).join("");
+}
 
 /** Rellena los formularios con la configuración guardada (solo al entrar, para no pisar lo que se está editando). */
 function fillForms(): void {
@@ -138,4 +205,6 @@ function fillForms(): void {
   form.querySelectorAll<HTMLInputElement>('input[name="wdia"]').forEach((i) => (i.checked = c.trabajo.dias.includes(Number(i.value))));
   qs<HTMLSelectElement>("#aMoneda", root).value = c.monedaPrincipal;
   qs<HTMLInputElement>("#gClient", root).value = c.googleClientId;
+  qs<HTMLInputElement>("#eltToken", root).value = c.cambio.eltoqueToken;
+  qs<HTMLInputElement>("#eltProxy", root).value = c.cambio.proxyUrl;
 }

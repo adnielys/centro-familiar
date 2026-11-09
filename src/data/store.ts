@@ -125,6 +125,7 @@ function mergeConfig(saved: Partial<Config> | undefined): Config {
     ...saved,
     jornada: { ...d.jornada, ...saved?.jornada },
     trabajo: { ...d.trabajo, ...saved?.trabajo },
+    cambio: { ...d.cambio, ...saved?.cambio },
   };
 }
 

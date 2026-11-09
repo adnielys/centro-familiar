@@ -126,6 +126,14 @@ export interface Corte extends Entity {
   nota: string;
 }
 
+/** Tasa de cambio de un día: 1 USD = `usd` CUP. id = fecha "YYYY-MM-DD". */
+export interface Tasa extends Entity {
+  fecha: ISODate;
+  usd: number;
+  fuente: "eltoque" | "manual";
+  actualizado: string;
+}
+
 /** Regla aprendida de una corrección: patrón de texto → categoría. */
 export interface Regla extends Entity {
   patron: string;
@@ -149,6 +157,8 @@ export interface Config {
   trabajo: { activo: boolean; dias: number[]; inicio: HHMM; fin: HHMM };
   /** OAuth Client ID de Google (tipo "Aplicación web") para leer Google Calendar. Vacío = desactivado. */
   googleClientId: string;
+  /** Tipo de cambio: token personal de elTOQUE y/o URL de un proxy propio (si el navegador no puede llamar directo). */
+  cambio: { eltoqueToken: string; proxyUrl: string };
 }
 
 export interface Collections {
@@ -161,14 +171,16 @@ export interface Collections {
   bloques: Bloque;
   fijos: GastoFijo;
   cortes: Corte;
+  tasas: Tasa;
 }
 
 export type CollectionName = keyof Collections;
-export const COLLECTION_NAMES: readonly CollectionName[] = ["hijos", "tareas", "gastos", "actividades", "deberes", "reglas", "bloques", "fijos", "cortes"];
+export const COLLECTION_NAMES: readonly CollectionName[] = ["hijos", "tareas", "gastos", "actividades", "deberes", "reglas", "bloques", "fijos", "cortes", "tasas"];
 
 export const DEFAULT_CONFIG: Config = {
   monedaPrincipal: "CUP",
   jornada: { inicio: "07:00", fin: "22:00" },
   trabajo: { activo: true, dias: [1, 2, 3, 4, 5], inicio: "09:00", fin: "17:00" },
   googleClientId: "",
+  cambio: { eltoqueToken: "", proxyUrl: "" },
 };

@@ -279,6 +279,10 @@ details[open] > .summary-h2::before { content: "−"; }
 .pager:empty { display: none; }
 .pager .btn[disabled] { opacity: .35; }
 input[type="search"] { -webkit-appearance: none; appearance: none; }
+.ok-text { color: var(--ok); }
+.bad-text { color: var(--bad); }
+.combinado { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 12px; border-radius: 12px; background: var(--accent-soft); }
+.combinado .num { font-size: 22px; font-weight: 700; }
 .item-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
 .item-head .amount { text-align: right; }
 .item-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin-top: 6px; }

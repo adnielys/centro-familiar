@@ -4,6 +4,7 @@
 import { CATEGORIAS, DIAS_CORTOS, METODOS, MONEDAS } from "../../domain/catalog";
 import { daysInMonth, fmtDate, fmtMonth, monthOf, todayISO } from "../../domain/dates";
 import { balanceDelMes, resumenDe, type Balance } from "../../domain/balance";
+import { tasaActual, totalCombinado } from "../../domain/cambio";
 import { estadoDelMes, FRECUENCIAS, historico, mesesHasta, resumenDelMes } from "../../domain/fijos";
 import type { Frecuencia, Gasto, GastoFijo, Metodo, Moneda, Naturaleza } from "../../domain/types";
 import { store } from "../../data/store";
@@ -52,6 +53,7 @@ export const gastosView: View = {
           <label for="gMes" class="inline-label">Mes <input id="gMes" type="month"></label>
         </div>
         <div id="balEstado"></div>
+        <div id="balCombinado"></div>
         <div id="balMonedas" class="stack"></div>
         <div class="actions">
           <button class="btn" type="button" id="balCerrar">Cerrar mes</button>
@@ -292,6 +294,7 @@ function renderBalance(): void {
     : ym < monthOf(todayISO()) ? chip("Mes terminado sin cerrar", "warn") : "";
   qs("#balCerrar", root).textContent = corte ? "Actualizar corte" : "Cerrar mes";
 
+  renderCombinado(ym);
   const bloques = balances(ym).filter(tieneDatos);
   qs("#balMonedas", root).innerHTML = bloques.length
     ? bloques.map((b) => {
@@ -312,6 +315,31 @@ function renderBalance(): void {
         </div>`;
       }).join("")
     : `<div class="empty">Sin gastos ni pagos pendientes en ${esc(fmtMonth(ym))}.</div>`;
+}
+
+/** Todo el mes sumado en una sola moneda, convirtiendo cada gasto con la tasa de su día. */
+function combinadoDelMes(ym: string): ReturnType<typeof totalCombinado> & { hayAmbas: boolean } {
+  const delMes = store.data.gastos.filter((g) => monthOf(g.fecha) === ym);
+  return { ...totalCombinado(delMes, store.data.tasas), hayAmbas: new Set(delMes.map((g) => g.moneda)).size > 1 };
+}
+
+function renderCombinado(ym: string): void {
+  const box = qs("#balCombinado", root);
+  const c = combinadoDelMes(ym);
+  const tasa = tasaActual(store.data.tasas, todayISO());
+  if (!c.hayAmbas) {
+    box.innerHTML = "";
+    return;
+  }
+  if (!tasa) {
+    box.innerHTML = `<div class="notice small">Tienes gastos en CUP y en USD. Añade la tasa del día en <a href="#ajustes">Ajustes → Tipo de cambio</a> (o conecta elTOQUE) para verlos sumados.</div>`;
+    return;
+  }
+  box.innerHTML = `<div class="combinado">
+      <div><div class="small muted">Todo junto en CUP</div><div class="num">${esc(numberFmt.format(c.cup))}</div></div>
+      <div><div class="small muted">Todo junto en USD</div><div class="num">${esc(numberFmt.format(c.usd))}</div></div>
+    </div>
+    <div class="small muted">Cada gasto convertido con la tasa de su día · hoy 1 USD = ${esc(numberFmt.format(tasa.usd))} CUP (${tasa.fuente === "eltoque" ? "elTOQUE" : "manual"})</div>`;
 }
 
 async function cerrarMes(ym: string): Promise<void> {
@@ -341,6 +369,8 @@ function renderCortes(): void {
 /** Texto del balance para compartir (WhatsApp, notas…). */
 function textoResumen(ym: string): string {
   const lineas = [`Balance de ${fmtMonth(ym)}`];
+  const comb = combinadoDelMes(ym);
+  if (comb.hayAmbas && store.data.tasas.length) lineas.push(`Todo junto: ${fmtMoney(comb.cup, "CUP")} ≈ ${fmtMoney(comb.usd, "USD")} (tasa de cada día; fuente elTOQUE/manual)`);
   for (const b of balances(ym).filter(tieneDatos)) {
     lineas.push("", `${b.moneda}: ${fmtMoney(b.total, b.moneda)} gastados${b.variacion === null ? "" : ` (${b.variacion > 0 ? "+" : ""}${b.variacion}% vs mes anterior)`}`);
     lineas.push(`• Base: ${numberFmt.format(b.base)} · Variable: ${numberFmt.format(b.variable)}`);

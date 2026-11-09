@@ -84,6 +84,20 @@ Para que tus eventos cuenten como ocupado:
 
 Es solo lectura. Al no haber backend, el permiso dura 1 hora y se renueva con «Conectar» (Agenda o Ajustes).
 
+## Tipo de cambio (elTOQUE)
+
+La app suma tus gastos en CUP y USD en una sola moneda usando la **TRMI de elTOQUE** (o una tasa manual). Cada gasto se convierte con la tasa **del día en que se hizo**.
+
+1. Pide tu token gratis en <https://tasas-token.eltoque.com/>.
+2. **Ajustes → Tipo de cambio → Actualizar sola desde elTOQUE**: pega el token y toca *Actualizar ahora*. La app consulta una vez al día al abrirse (`GET https://tasas.eltoque.com/v1/trmi`, ventana < 24 h).
+3. Si aparece «El navegador no pudo conectar con elTOQUE», la API no admite llamadas directas desde apps web (CORS). Despliega el proxy:
+   - Cloudflare → Workers & Pages → Create Worker → pega [`proxy/eltoque-worker.js`](proxy/eltoque-worker.js) → Deploy.
+   - Settings → Variables and Secrets → Secret `ELTOQUE_TOKEN` = tu token (y opcional `ALLOWED_ORIGIN` = `https://adnielys.github.io`).
+   - Copia la URL `https://….workers.dev` en *URL de proxy* y deja el token vacío en la app.
+4. Sin token también funciona: escribe la tasa del día a mano.
+
+Según las condiciones de elTOQUE, donde se muestra la tasa automática se cita a elTOQUE como fuente.
+
 ## Hoja de ruta
 
 1. **Sincronización entre dispositivos**: backend NestJS + PostgreSQL (Docker) con API REST; el `store` ya centraliza las escrituras, así que se añade un adaptador de sincronización sin tocar las vistas. Permitiría también refresh tokens de Google y que agentes externos lean los datos.

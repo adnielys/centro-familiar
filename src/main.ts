@@ -10,6 +10,7 @@ import { COLLECTION_NAMES } from "./domain/types";
 import { store } from "./data/store";
 import { attempt, confirmTap, qs, toast } from "./ui/dom";
 import { pagarFijo } from "./ui/fijosActions";
+import { actualizarSiHaceFalta } from "./integrations/eltoque";
 import { ICONS } from "./ui/icons";
 import { startRouter } from "./ui/router";
 import { alternarTarea, registrarGastoDeHecha } from "./ui/tareaActions";
@@ -109,6 +110,9 @@ async function main(): Promise<void> {
     onPlus: () => abrirTareaSheet(),
   });
 
+  // Tasa de cambio del día (elTOQUE), en segundo plano.
+  void actualizarSiHaceFalta();
+
   // Pide almacenamiento persistente para que el sistema no borre los datos por falta de espacio.
   void navigator.storage?.persist?.();
 
@@ -122,6 +126,7 @@ async function main(): Promise<void> {
     if (document.visibilityState === "visible" && todayISO() !== dia) {
       dia = todayISO();
       qs("#todayLabel").textContent = fmtLongDate(dia);
+      void actualizarSiHaceFalta();
       window.dispatchEvent(new HashChangeEvent("hashchange"));
     }
   });
