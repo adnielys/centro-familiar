@@ -34,13 +34,14 @@ export function gastoItem(g: Gasto, showDate = true): string {
 }
 
 export function actividadItem(a: Actividad): string {
-  const kid = store.byId("hijos", a.hijoId);
+  const kids = a.hijoIds.map((id) => store.byId("hijos", id)).filter((k): k is NonNullable<typeof k> => Boolean(k));
+  const kid = kids[0];
   const horario = a.horaFin ? `${a.horaInicio}–${a.horaFin}` : a.horaInicio;
   return `<li>
     <span class="stripe" style="background:${esc(kidColor(kid))}"></span>
     <span class="time">${esc(a.horaInicio)}</span>
     <div class="grow"><div class="title">${esc(a.titulo)}</div>
-      <div class="chips">${kidChip(kid)}${chip(TIPOS_ACTIVIDAD[a.tipo])}${chip(horario)}${a.lugar ? chip(a.lugar) : ""}${a.meOcupa ? chip("Te ocupa", "warn") : ""}</div>
+      <div class="chips">${kids.map(kidChip).join("")}${chip(TIPOS_ACTIVIDAD[a.tipo])}${chip(horario)}${a.lugar ? chip(a.lugar) : ""}${a.meOcupa ? chip("Te ocupa", "warn") : ""}</div>
       ${a.llevar ? `<div class="small muted">Llevar: ${esc(a.llevar)}</div>` : ""}
     </div></li>`;
 }

@@ -8,14 +8,17 @@ const LUNES = "2026-11-09";
 const SABADO = "2026-11-14";
 
 const actividad = (over: Partial<Actividad>): Actividad => ({
-  id: "a1", hijoId: "k1", titulo: "Natación", tipo: "deporte", dias: [1, 3], horaInicio: "17:30", horaFin: "18:30",
+  id: "a1", hijoIds: ["k1"], titulo: "Natación", tipo: "deporte", dias: [1, 3], horaInicio: "17:30", horaFin: "18:30",
   lugar: "", llevar: "", meOcupa: true, ...over,
 });
 const bloque = (over: Partial<Bloque>): Bloque => ({ id: "b1", titulo: "Gimnasio", fecha: LUNES, inicio: "07:00", fin: "08:00", tareaId: null, ...over });
 
 const base = (over: Partial<FuentesAgenda> = {}): FuentesAgenda => ({
   config: { jornada: { inicio: "07:00", fin: "22:00" }, trabajo: { activo: true, dias: [1, 2, 3, 4, 5], inicio: "09:00", fin: "17:00" } },
-  hijos: [{ id: "k1", nombre: "Ana", escuela: "", grado: "", color: "#000" }],
+  hijos: [
+    { id: "k1", nombre: "Ana", escuela: "", grado: "", color: "#000" },
+    { id: "k2", nombre: "Leo", escuela: "", grado: "", color: "#111" },
+  ],
   actividades: [actividad({})],
   bloques: [bloque({})],
   ...over,
@@ -35,6 +38,12 @@ describe("ocupacionesDelDia", () => {
     const f = base({ actividades: [actividad({ meOcupa: false })], bloques: [] });
     expect(ocupacionesDelDia(LUNES, f).map((o) => o.fuente)).toEqual(["trabajo"]);
     expect(ocupacionesDelDia(SABADO, f)).toEqual([]);
+  });
+
+  it("una actividad compartida por varios hijos es un solo bloque con todos los nombres", () => {
+    const f = base({ actividades: [actividad({ hijoIds: ["k1", "k2"] })], bloques: [] });
+    const hijos = ocupacionesDelDia(LUNES, f).filter((o) => o.fuente === "hijos");
+    expect(hijos.map((o) => o.titulo)).toEqual(["Natación (Ana, Leo)"]);
   });
 
   it("una actividad sin hora de fin dura 60 minutos", () => {

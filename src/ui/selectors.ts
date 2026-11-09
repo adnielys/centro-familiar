@@ -15,7 +15,7 @@ export const tareasUrgentes = (today: ISODate): Tarea[] => tareasPorEstado("pend
 export function actividadesDelDia(iso: ISODate, hijoId?: string): Actividad[] {
   const wd = isoWeekday(iso);
   return store.data.actividades
-    .filter((a) => a.dias.includes(wd) && (!hijoId || a.hijoId === hijoId))
+    .filter((a) => a.dias.includes(wd) && (!hijoId || a.hijoIds.includes(hijoId)))
     .sort((a, b) => a.horaInicio.localeCompare(b.horaInicio));
 }
 

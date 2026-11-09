@@ -46,7 +46,8 @@ export interface Gasto extends Entity {
 }
 
 export interface Actividad extends Entity {
-  hijoId: string;
+  /** Hijos que hacen esta actividad (una misma clase puede ser de varios). */
+  hijoIds: string[];
   titulo: string;
   tipo: TipoActividad;
   /** Días ISO: 1 = lunes … 7 = domingo. */

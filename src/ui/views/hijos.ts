@@ -1,14 +1,16 @@
 import { COLORES_HIJO, DIAS_CORTOS, TIPOS_ACTIVIDAD, TIPOS_DEBER } from "../../domain/catalog";
 import { MATERIAS_LISTA } from "../../domain/clasificador.js";
 import { isoWeekday, todayISO } from "../../domain/dates";
-import type { TipoActividad, TipoDeber } from "../../domain/types";
+import type { Actividad, TipoActividad, TipoDeber } from "../../domain/types";
 import { store } from "../../data/store";
-import { attempt, delBtn, emptyLi, esc, formValues, kidColor, optionsHtml, qs, toast } from "../dom";
+import { attempt, emptyLi, esc, formValues, kidColor, optionsHtml, qs, toast } from "../dom";
 import { deberItem } from "../items";
 import type { View } from "../router";
 
 let root: HTMLElement;
 let hijoSel: string | null = null;
+/** Actividad que se está editando en el formulario (null = creando una nueva). */
+let editandoId: string | null = null;
 
 export const hijosView: View = {
   id: "hijos",
@@ -36,22 +38,32 @@ export const hijosView: View = {
         <div class="card">
           <div class="card-head"><h2 id="kidTitle"></h2><button class="icon-btn" type="button" id="delKid">Eliminar hijo</button></div>
           <div class="week-wrap"><div class="week" id="kidWeek"></div></div>
-          <details>
-            <summary>Añadir actividad o clase</summary>
+          <details id="detActividad">
+            <summary id="actSummary">Añadir actividad o clase</summary>
             <form id="formActividad" autocomplete="off">
               <div class="row">
                 <label for="aTitulo">Actividad <input id="aTitulo" name="titulo" required maxlength="80" placeholder="Natación"></label>
                 <label for="aTipo">Tipo <select id="aTipo" name="tipo">${optionsHtml(Object.entries(TIPOS_ACTIVIDAD), "extraescolar")}</select></label>
                 <label for="aLugar">Lugar <input id="aLugar" name="lugar" maxlength="80"></label>
               </div>
-              <div class="days" role="group" aria-label="Días">${DIAS_CORTOS.map((d, i) => `<label for="dia${i + 1}"><input type="checkbox" id="dia${i + 1}" name="dia" value="${i + 1}">${d}</label>`).join("")}</div>
+              <fieldset class="fieldset">
+                <legend>Para</legend>
+                <div class="days" id="aHijos"></div>
+              </fieldset>
+              <fieldset class="fieldset">
+                <legend>Días</legend>
+                <div class="days">${DIAS_CORTOS.map((d, i) => `<label for="dia${i + 1}"><input type="checkbox" id="dia${i + 1}" name="dia" value="${i + 1}">${d}</label>`).join("")}</div>
+              </fieldset>
               <div class="row">
                 <label for="aInicio">Empieza <input id="aInicio" name="horaInicio" type="time" required></label>
                 <label for="aFin">Termina <input id="aFin" name="horaFin" type="time"></label>
               </div>
               <label for="aLlevar">Qué llevar <input id="aLlevar" name="llevar" maxlength="120" placeholder="Toalla, gorro, merienda"></label>
               <label class="check" for="aMeOcupa"><input type="checkbox" id="aMeOcupa" name="meOcupa" checked> Me ocupa a mí (llevar, recoger o acompañar): cuenta como ocupado en mi agenda</label>
-              <button class="btn" type="submit">Guardar actividad</button>
+              <div class="actions">
+                <button class="btn" type="submit" id="actGuardar">Guardar actividad</button>
+                <button class="btn ghost" type="button" id="actCancelar" hidden>Cancelar edición</button>
+              </div>
             </form>
           </details>
         </div>
@@ -74,11 +86,18 @@ export const hijosView: View = {
       </div>`;
 
     el.addEventListener("click", (e) => {
-      const b = (e.target as HTMLElement).closest<HTMLElement>("[data-kid]");
-      if (b) {
-        hijoSel = b.dataset.kid ?? null;
+      const t = e.target as HTMLElement;
+      const kidBtn = t.closest<HTMLElement>("[data-kid]");
+      if (kidBtn) {
+        hijoSel = kidBtn.dataset.kid ?? null;
+        salirDeEdicion();
         this.update();
+        return;
       }
+      const editBtn = t.closest<HTMLElement>("[data-edit-act]");
+      if (editBtn?.dataset.editAct) return editarActividad(editBtn.dataset.editAct);
+      const quitarBtn = t.closest<HTMLButtonElement>("[data-quitar-act]");
+      if (quitarBtn?.dataset.quitarAct) return quitarDeHijo(quitarBtn, quitarBtn.dataset.quitarAct);
     });
 
     // Las clases de escuela normalmente no te ocupan; el resto sí (llevar/recoger).
@@ -101,23 +120,11 @@ export const hijosView: View = {
       }
     });
 
-    qs<HTMLFormElement>("#formActividad", el).addEventListener("submit", async (e) => {
+    qs<HTMLFormElement>("#formActividad", el).addEventListener("submit", (e) => {
       e.preventDefault();
-      const form = e.target as HTMLFormElement;
-      const v = formValues(form);
-      const dias = Array.from(form.querySelectorAll<HTMLInputElement>('input[name="dia"]:checked')).map((i) => Number(i.value));
-      if (!hijoSel) return;
-      if (!dias.length) return toast("Elige al menos un día.");
-      if (v.horaFin && v.horaFin <= v.horaInicio) return toast("La hora de fin debe ser posterior al inicio.");
-      const ok = await attempt(
-        () => store.add("actividades", {
-          hijoId: hijoSel as string, titulo: v.titulo, tipo: v.tipo as TipoActividad, dias, horaInicio: v.horaInicio,
-          horaFin: v.horaFin || null, lugar: v.lugar, llevar: v.llevar, meOcupa: qs<HTMLInputElement>("#aMeOcupa", form).checked,
-        }),
-        "Actividad guardada",
-      );
-      if (ok) form.reset();
+      void guardarActividad(e.target as HTMLFormElement);
     });
+    qs<HTMLButtonElement>("#actCancelar", el).addEventListener("click", () => salirDeEdicion());
 
     qs<HTMLFormElement>("#formDeber", el).addEventListener("submit", async (e) => {
       e.preventDefault();
@@ -162,15 +169,15 @@ export const hijosView: View = {
     qs("#kidPanel", root).hidden = !kid;
     if (!kid) return;
 
+    renderHijosDelFormulario();
+
     const today = todayISO();
     const wdHoy = isoWeekday(today);
     qs("#kidTitle", root).textContent = `Horario de ${kid.nombre}${kid.grado ? ` · ${kid.grado}` : ""}`;
     qs("#kidWeek", root).innerHTML = DIAS_CORTOS.map((label, i) => {
       const wd = i + 1;
-      const acts = store.data.actividades.filter((a) => a.hijoId === kid.id && a.dias.includes(wd)).sort((a, b) => a.horaInicio.localeCompare(b.horaInicio));
-      return `<div class="day-col${wd === wdHoy ? " is-today" : ""}"><h3>${label}</h3>${
-        acts.map((a) => `<div class="slot" style="border-color:${esc(kidColor(kid))}"><strong>${esc(a.horaInicio)}</strong> ${esc(a.titulo)}${a.lugar ? `<div class="muted">${esc(a.lugar)}</div>` : ""}${a.meOcupa ? `<div class="muted">Te ocupa</div>` : ""}${delBtn("actividades", a.id, "Quitar")}</div>`).join("") || `<span class="muted small">—</span>`
-      }</div>`;
+      const acts = store.data.actividades.filter((a) => a.hijoIds.includes(kid.id) && a.dias.includes(wd)).sort((a, b) => a.horaInicio.localeCompare(b.horaInicio));
+      return `<div class="day-col${wd === wdHoy ? " is-today" : ""}"><h3>${label}</h3>${acts.map((a) => slotHtml(a, kid.id)).join("") || `<span class="muted small">—</span>`}</div>`;
     }).join("");
 
     const deberes = store.data.deberes
@@ -180,9 +187,111 @@ export const hijosView: View = {
   },
 };
 
-/** Al borrar un hijo se borran su horario y deberes; sus gastos y tareas quedan sin asignar. */
+function slotHtml(a: Actividad, kidId: string): string {
+  const otros = a.hijoIds.filter((id) => id !== kidId).map((id) => store.byId("hijos", id)?.nombre).filter(Boolean);
+  const color = kidColor(store.byId("hijos", kidId));
+  return `<div class="slot${editandoId === a.id ? " editing" : ""}" style="border-color:${esc(color)}">
+    <strong>${esc(a.horaInicio)}</strong> ${esc(a.titulo)}
+    ${a.lugar ? `<div class="muted">${esc(a.lugar)}</div>` : ""}
+    ${otros.length ? `<div class="muted">Con ${esc(otros.join(", "))}</div>` : ""}
+    ${a.meOcupa ? `<div class="muted">Te ocupa</div>` : ""}
+    <div class="slot-actions">
+      <button class="icon-btn accent" type="button" data-edit-act="${esc(a.id)}">Editar</button>
+      <button class="icon-btn" type="button" data-quitar-act="${esc(a.id)}">Quitar</button>
+    </div>
+  </div>`;
+}
+
+/** Casillas "Para" con todos los hijos; conserva lo marcado salvo al cambiar de modo. */
+function renderHijosDelFormulario(seleccion?: readonly string[]): void {
+  const cont = qs("#aHijos", root);
+  const marcados = seleccion ?? (cont.childElementCount
+    ? Array.from(cont.querySelectorAll<HTMLInputElement>("input:checked")).map((i) => i.value)
+    : hijoSel ? [hijoSel] : []);
+  cont.innerHTML = store.data.hijos.map((k) => `<label for="ah-${esc(k.id)}"><input type="checkbox" id="ah-${esc(k.id)}" name="hijo" value="${esc(k.id)}"${marcados.includes(k.id) ? " checked" : ""}>${esc(k.nombre)}</label>`).join("");
+}
+
+function editarActividad(id: string): void {
+  const a = store.byId("actividades", id);
+  if (!a) return;
+  editandoId = id;
+  const form = qs<HTMLFormElement>("#formActividad", root);
+  const set = (name: string, value: string): void => {
+    (form.elements.namedItem(name) as HTMLInputElement | HTMLSelectElement).value = value;
+  };
+  set("titulo", a.titulo);
+  set("tipo", a.tipo);
+  set("lugar", a.lugar);
+  set("horaInicio", a.horaInicio);
+  set("horaFin", a.horaFin ?? "");
+  set("llevar", a.llevar);
+  qs<HTMLInputElement>("#aMeOcupa", form).checked = a.meOcupa;
+  form.querySelectorAll<HTMLInputElement>('input[name="dia"]').forEach((i) => (i.checked = a.dias.includes(Number(i.value))));
+  renderHijosDelFormulario(a.hijoIds);
+  setModoEdicion(true, a.titulo);
+  const det = qs<HTMLDetailsElement>("#detActividad", root);
+  det.open = true;
+  det.scrollIntoView({ behavior: "smooth", block: "start" });
+  hijosView.update();
+}
+
+function salirDeEdicion(): void {
+  editandoId = null;
+  const form = qs<HTMLFormElement>("#formActividad", root);
+  form.reset();
+  renderHijosDelFormulario(hijoSel ? [hijoSel] : []);
+  setModoEdicion(false);
+  hijosView.update();
+}
+
+function setModoEdicion(editando: boolean, titulo = ""): void {
+  qs("#actSummary", root).textContent = editando ? `Editando: ${titulo}` : "Añadir actividad o clase";
+  qs("#actGuardar", root).textContent = editando ? "Guardar cambios" : "Guardar actividad";
+  qs("#actCancelar", root).hidden = !editando;
+}
+
+async function guardarActividad(form: HTMLFormElement): Promise<void> {
+  const v = formValues(form);
+  const dias = Array.from(form.querySelectorAll<HTMLInputElement>('input[name="dia"]:checked')).map((i) => Number(i.value));
+  const hijoIds = Array.from(form.querySelectorAll<HTMLInputElement>('input[name="hijo"]:checked')).map((i) => i.value);
+  if (!hijoIds.length) return toast("Elige al menos un hijo en «Para».");
+  if (!dias.length) return toast("Elige al menos un día.");
+  if (v.horaFin && v.horaFin <= v.horaInicio) return toast("La hora de fin debe ser posterior al inicio.");
+  const datos: Omit<Actividad, "id" | "creado"> = {
+    hijoIds, titulo: v.titulo, tipo: v.tipo as TipoActividad, dias, horaInicio: v.horaInicio,
+    horaFin: v.horaFin || null, lugar: v.lugar, llevar: v.llevar, meOcupa: qs<HTMLInputElement>("#aMeOcupa", form).checked,
+  };
+  const id = editandoId;
+  const ok = await attempt(() => (id ? store.update("actividades", id, datos) : store.add("actividades", datos)), id ? "Cambios guardados" : "Actividad guardada");
+  if (ok) salirDeEdicion();
+}
+
+/** Quita la actividad del horario de este hijo; si no le queda ningún hijo, se borra. Dos toques. */
+function quitarDeHijo(btn: HTMLButtonElement, id: string): void {
+  const a = store.byId("actividades", id);
+  if (!a || !hijoSel) return;
+  if (!btn.dataset.armed) {
+    btn.dataset.armed = "1";
+    btn.textContent = "¿Seguro?";
+    setTimeout(() => {
+      if (!btn.isConnected) return;
+      delete btn.dataset.armed;
+      btn.textContent = "Quitar";
+    }, 3000);
+    return;
+  }
+  const restantes = a.hijoIds.filter((h) => h !== hijoSel);
+  if (editandoId === id) salirDeEdicion();
+  void attempt(() => (restantes.length ? store.update("actividades", id, { hijoIds: restantes }) : store.remove("actividades", id)), "Quitado del horario");
+}
+
+/** Al borrar un hijo: sale de sus actividades (se borran si quedan sin hijos) y se borran sus deberes; gastos y tareas quedan sin asignar. */
 async function removeKidCascade(kidId: string): Promise<void> {
-  for (const a of store.data.actividades.filter((x) => x.hijoId === kidId)) await store.remove("actividades", a.id);
+  for (const a of store.data.actividades.filter((x) => x.hijoIds.includes(kidId))) {
+    const restantes = a.hijoIds.filter((h) => h !== kidId);
+    if (restantes.length) await store.update("actividades", a.id, { hijoIds: restantes });
+    else await store.remove("actividades", a.id);
+  }
   for (const d of store.data.deberes.filter((x) => x.hijoId === kidId)) await store.remove("deberes", d.id);
   for (const g of store.data.gastos.filter((x) => x.hijoId === kidId)) await store.update("gastos", g.id, { hijoId: null });
   for (const t of store.data.tareas.filter((x) => x.hijoId === kidId)) await store.update("tareas", t.id, { hijoId: null });

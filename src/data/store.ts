@@ -2,8 +2,9 @@
  * Store de la aplicación: estado en memoria + persistencia en IndexedDB + notificación de cambios.
  * Las vistas leen `store.data` / `store.config` y se suscriben con `store.subscribe`.
  */
-import { COLLECTION_NAMES, DEFAULT_CONFIG, type CollectionName, type Collections, type Config } from "../domain/types";
+import { COLLECTION_NAMES, DEFAULT_CONFIG, type Actividad, type CollectionName, type Collections, type Config } from "../domain/types";
 import { dbApi } from "./db";
+import { migrarActividad } from "./migrations";
 
 type Listener = () => void;
 type DataState = { [K in CollectionName]: Collections[K][] };
@@ -23,6 +24,7 @@ class Store {
   async init(): Promise<void> {
     const entries = await Promise.all(COLLECTION_NAMES.map(async (c) => [c, await dbApi.getAll(c)] as const));
     this.data = Object.fromEntries(entries) as unknown as DataState;
+    await this.migrate();
     const saved = await dbApi.getConfig();
     this.config = mergeConfig(saved);
     this.emit();
@@ -81,6 +83,17 @@ class Store {
     }
     if (config) await dbApi.putConfig(mergeConfig(config));
     await this.init();
+  }
+
+  /** Aplica migraciones de datos antiguos y persiste solo lo que cambió. */
+  private async migrate(): Promise<void> {
+    const actividades: Actividad[] = [];
+    for (const raw of this.data.actividades) {
+      const { actividad, cambiada } = migrarActividad(raw);
+      if (cambiada) await dbApi.put("actividades", actividad);
+      actividades.push(actividad);
+    }
+    this.data.actividades = actividades;
   }
 
   private emit(): void {

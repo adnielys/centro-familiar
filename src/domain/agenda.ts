@@ -51,12 +51,13 @@ export function ocupacionesDelDia(fecha: ISODate, f: FuentesAgenda): Ocupacion[]
     result.push({ inicio: toMinutes(trabajo.inicio), fin: toMinutes(trabajo.fin), fuente: "trabajo", titulo: "Trabajo" });
   }
 
-  const nombre = (id: string): string => f.hijos.find((h) => h.id === id)?.nombre ?? "";
+  const nombres = (ids: readonly string[]): string =>
+    ids.map((id) => f.hijos.find((h) => h.id === id)?.nombre).filter(Boolean).join(", ");
   for (const a of f.actividades) {
     if (!a.meOcupa || !a.dias.includes(wd)) continue;
     const inicio = toMinutes(a.horaInicio);
     const fin = a.horaFin ? toMinutes(a.horaFin) : inicio + DURACION_ACTIVIDAD_DEFECTO;
-    const quien = nombre(a.hijoId);
+    const quien = nombres(a.hijoIds);
     result.push({ inicio, fin, fuente: "hijos", titulo: quien ? `${a.titulo} (${quien})` : a.titulo, refId: a.id });
   }
 
