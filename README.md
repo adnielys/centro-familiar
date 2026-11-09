@@ -138,7 +138,7 @@ Apple no deja instalar nada sin firma. Dos caminos:
 ```bash
 npm run build && npx cap sync ios   # copia dist/ al proyecto iOS
 ```
-`ios/App/App/public` y `capacitor.config.json` se generan en cada `sync` (no se versionan). Icono: `ios/App/App/Assets.xcassets/AppIcon.appiconset` (1024×1024, sin transparencia).
+`ios/App/App/public` y `capacitor.config.json` se generan en cada `sync` (no se versionan). Iconos: se editan en `public/icons/icon.svg` y se regeneran todos (web, iOS, Android, splash) con `python3 scripts/generar-iconos.py`.
 
 ## App Android
 
