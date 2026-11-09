@@ -33,6 +33,7 @@ export interface Propuesta {
 }
 
 export function analizarTexto(texto: string, ctx: ContextoClasificador): Propuesta[];
+export function categoriaDeTexto(texto: string, reglas: ContextoClasificador["reglas"]): { categoria: string; confianza: Confianza; fuente: string };
 export function analizarRecibo(ocrText: string, ctx: ContextoClasificador): Propuesta;
 export function patronDeAprendizaje(descripcion: string): string | null;
 export function idDeRegla(patron: string): string;

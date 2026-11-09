@@ -15,6 +15,10 @@ import { ICONS } from "../icons";
 import type { View } from "../router";
 import { gastosDelMes, sumarPor, totalEn } from "../selectors";
 import { buscarGastos, paginar } from "../../domain/busqueda";
+import { analizarRecibo } from "../../domain/clasificador.js";
+import { leerTicket } from "../../domain/ticket";
+import { describirProgreso, reconocerTexto } from "../../integrations/ocr";
+import { abrirRevisionTicket } from "../ticketSheet";
 
 let root: HTMLElement;
 const ui = {
@@ -121,6 +125,12 @@ export const gastosView: View = {
       <div class="card" id="gastoCard">
         <details id="detGasto">
         <summary class="summary-h2"><span id="gastoTitulo">Registrar gasto</span></summary>
+        <div class="ticket-scan">
+          <label class="btn ghost" for="gTicket">${ICONS.camara}<span>Escanear ticket</span>
+            <input id="gTicket" type="file" accept="image/*"></label>
+          <span class="small muted">Foto o captura: separa cada artículo como gasto.</span>
+        </div>
+        <div id="gTicketEstado" class="small muted" role="status" aria-live="polite"></div>
         <form id="formGasto" autocomplete="off">
           <div class="row">
             <label for="gMonto">Monto <input id="gMonto" name="monto" type="number" inputmode="decimal" min="0.01" step="0.01" required placeholder="350"></label>
@@ -183,6 +193,12 @@ export const gastosView: View = {
       void guardarGasto(e.target as HTMLFormElement);
     });
     qs<HTMLButtonElement>("#gCancelar", el).addEventListener("click", () => salirEdicionGasto());
+    qs<HTMLInputElement>("#gTicket", el).addEventListener("change", (e) => {
+      const input = e.target as HTMLInputElement;
+      const file = input.files?.[0];
+      input.value = "";
+      if (file) void escanearTicket(file);
+    });
 
     qs<HTMLFormElement>("#formFijo", el).addEventListener("submit", (e) => {
       e.preventDefault();
@@ -437,6 +453,51 @@ function salirEdicionGasto(): void {
   qs("#gGuardar", root).textContent = "Guardar gasto";
   qs("#gCancelar", root).hidden = true;
   renderToggles();
+}
+
+/* ---------------------------- Ticket escaneado ---------------------------- */
+
+function estadoTicket(texto: string, progreso: number | null = null): void {
+  qs("#gTicketEstado", root).innerHTML = texto
+    ? `${esc(texto)}${progreso !== null ? `<div class="progress"><span style="width:${Math.round(progreso * 100)}%"></span></div>` : ""}`
+    : "";
+}
+
+/** OCR local → artículos. Si no se distinguen artículos, rellena el formulario con el total. */
+async function escanearTicket(file: File): Promise<void> {
+  estadoTicket("Preparando la imagen…", 0);
+  let texto: string;
+  try {
+    texto = await reconocerTexto(file, (p) => estadoTicket(describirProgreso(p), p.progress ?? null));
+  } catch (e) {
+    console.error(e);
+    return estadoTicket("No se pudo leer la imagen. La primera vez necesita conexión para descargar el lector.");
+  }
+  if (!texto.trim()) return estadoTicket("No se encontró texto. Prueba con más luz, el ticket plano y sin sombras.");
+  estadoTicket("");
+
+  const ctx = { hoy: todayISO(), hijos: store.data.hijos, reglas: store.data.reglas, monedaPorDefecto: store.config.monedaPrincipal };
+  const recibo = analizarRecibo(texto, ctx).datos;
+  const lectura = leerTicket(texto);
+  if (lectura.articulos.length) {
+    abrirRevisionTicket(lectura, texto, {
+      fecha: String(recibo.fecha ?? todayISO()),
+      moneda: (recibo.moneda as Moneda) ?? store.config.monedaPrincipal,
+      metodo: (recibo.metodo as Metodo) ?? "efectivo",
+    });
+    return;
+  }
+  // Sin artículos separables (p. ej. comprobante de Banca Remota): un solo gasto con el total.
+  const form = qs<HTMLFormElement>("#formGasto", root);
+  if (recibo.monto) qs<HTMLInputElement>("#gMonto", form).value = String(recibo.monto);
+  if (recibo.fecha) qs<HTMLInputElement>("#gFecha", form).value = String(recibo.fecha);
+  qs<HTMLInputElement>("#gDesc", form).value = String(recibo.descripcion ?? "");
+  const categoria = String(recibo.categoria ?? "");
+  if (CATEGORIAS.includes(categoria)) qs<HTMLSelectElement>("#gCategoria", form).value = categoria;
+  ui.moneda = recibo.moneda as Moneda;
+  ui.metodo = recibo.metodo as Metodo;
+  renderToggles();
+  estadoTicket("No distinguí artículos sueltos: rellené el gasto con el total. Revísalo y guarda.");
 }
 
 async function guardarGasto(form: HTMLFormElement): Promise<void> {

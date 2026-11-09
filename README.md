@@ -9,6 +9,7 @@ PWA (aplicación web instalable) para gestionar **tareas, agenda y tiempo libre,
 | **Hoy** | Tiempo libre que te queda, lo próximo de la agenda, tareas vencidas, actividades de los niños, deberes y gastos del mes por moneda. |
 | **Agenda** | Tu día con lo ocupado (trabajo, niños, bloques, Google Calendar) y los huecos libres. Al agendar te dice al momento si estás libre o con qué chocas, y te propone el siguiente hueco. |
 | **Registrar** | Texto libre («350 almuerzo efectivo», «examen de mate de Ana el jueves», «llamar al plomero mañana a las 10») o foto/captura con OCR local. Propone, tú confirmas, y aprende de tus correcciones. |
+| **Dinero → Escanear ticket** | Foto o captura de un ticket con varios artículos (Walmart, mipyme…): OCR local, separa cada artículo con su importe, aplica descuentos, compara con el total impreso y propone categoría. Se guarda por artículo, por categoría o como un solo gasto (`src/domain/ticket.ts`). |
 | **Tareas / Gastos / Hijos** | Gestión manual completa: horarios semanales, deberes, resúmenes por categoría, método y hijo. |
 | **Ajustes** | Jornada y horario de trabajo, moneda, Google Calendar, copia de seguridad. |
 

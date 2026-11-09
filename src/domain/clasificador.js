@@ -658,7 +658,11 @@ function patronDeAprendizaje(descripcion) {
 /** Id seguro para la base de datos a partir de un patrón. */
 const idDeRegla = (patron) => normalize(patron).replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 60);
 
+/** Categoría de un texto suelto (p. ej. una línea de ticket): reglas aprendidas y diccionario. */
+const categoriaDeTexto = (texto, reglas) => classifyCategory(normalize(texto), reglas, null);
+
 export {
+  categoriaDeTexto,
   analizarTexto,
   analizarRecibo,
   patronDeAprendizaje,

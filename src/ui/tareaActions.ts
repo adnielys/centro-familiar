@@ -8,7 +8,7 @@ import { enPeriodoActual } from "../domain/periodos";
 import { gastoDeTarea, planCompletar, type Pago } from "../domain/tareas";
 import type { Metodo, Moneda, Tarea } from "../domain/types";
 import { store } from "../data/store";
-import { attempt, esc, fmtMoney, optionsHtml, qs, toast } from "./dom";
+import { attempt, esc, fmtMoney, optionsHtml, qs, seg, toast } from "./dom";
 import { openSheet } from "./sheet";
 
 /** Importes pagados anteriormente en la misma serie de tareas, del más antiguo al más reciente. */
@@ -55,9 +55,6 @@ async function reabrir(t: Tarea, borrarGasto: boolean): Promise<void> {
   if (borrarGasto && t.gastoId) await store.remove("gastos", t.gastoId);
   await store.update("tareas", t.id, { estado: "pendiente", completada: null, gastoId: borrarGasto ? null : t.gastoId });
 }
-
-const seg = (name: string, entries: ReadonlyArray<readonly [string, string]>, selected: string): string =>
-  `<div class="seg wide" role="group">${entries.map(([v, l]) => `<button type="button" data-seg="${name}" data-value="${v}" aria-pressed="${v === selected}">${esc(l)}</button>`).join("")}</div>`;
 
 /** Hoja «¿Cuánto pagaste?». Si se cierra sin elegir, `onCancel` deshace el check visual. */
 function pedirPago(t: Tarea, onCancel: () => void): void {

@@ -114,3 +114,7 @@ export function confirmTap(btn: HTMLElement, pregunta = "¿Seguro?"): boolean {
   }, 3000);
   return false;
 }
+
+/** Grupo de botones segmentados (uno activo). Se gestiona con `[data-seg]` en el contenedor. */
+export const seg = (name: string, entries: ReadonlyArray<readonly [string, string]>, selected: string): string =>
+  `<div class="seg wide" role="group">${entries.map(([v, l]) => `<button type="button" data-seg="${name}" data-value="${esc(v)}" aria-pressed="${v === selected}">${esc(l)}</button>`).join("")}</div>`;

@@ -300,3 +300,16 @@ input.round-check:checked::after { content: ""; width: 7px; height: 12px; border
 .toast[hidden] { display: none; }
 .toast { display: flex; align-items: center; gap: 12px; }
 .toast-action { background: none; border: 0; color: var(--accent-soft); font-weight: 700; text-transform: uppercase; font-size: 13px; letter-spacing: .03em; cursor: pointer; padding: 4px; }
+
+/* Revisión de ticket escaneado */
+.tk-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.tk-item { display: grid; grid-template-columns: auto 1fr 96px; grid-template-areas: "chk desc monto" ". cat cat"; gap: 6px 8px; align-items: center; padding: 10px; border-radius: 12px; background: var(--bg); border: 1px solid var(--line); }
+.tk-item > input[type="checkbox"] { grid-area: chk; width: 22px; height: 22px; min-height: 0; margin: 0; }
+.tk-item .tk-desc { grid-area: desc; min-width: 0; }
+.tk-item .tk-monto { grid-area: monto; text-align: right; }
+.tk-item .tk-cat { grid-area: cat; }
+.tk-item input, .tk-item select { min-height: 40px; padding: 8px 10px; font-size: 15px; }
+.tk-item.off { opacity: .5; }
+.tk-total { display: flex; justify-content: space-between; align-items: baseline; font-size: 17px; }
+.ticket-scan { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.ticket-scan input[type="file"] { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }

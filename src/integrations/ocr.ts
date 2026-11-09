@@ -11,6 +11,16 @@ export interface OcrProgress {
   progress: number;
 }
 
+const ESTADOS: Record<string, string> = {
+  "loading tesseract core": "Cargando el lector de texto…",
+  "loading language traineddata": "Cargando el idioma español…",
+  "initializing api": "Preparando…",
+  "recognizing text": "Leyendo la imagen…",
+};
+
+/** Texto en español para el estado que informa Tesseract. */
+export const describirProgreso = (p: OcrProgress): string => ESTADOS[p.status] ?? "Procesando…";
+
 let workerPromise: Promise<TesseractWorker> | null = null;
 let onProgress: ((p: OcrProgress) => void) | null = null;
 

@@ -9,7 +9,7 @@ import { analizarRecibo, analizarTexto, idDeRegla, MATERIAS_LISTA, patronDeApren
 import { addDays, fmtDate, toHHMM, toMinutes, todayISO } from "../../domain/dates";
 import type { Area, Frecuencia, Metodo, Moneda, Prioridad, TipoDeber } from "../../domain/types";
 import { store } from "../../data/store";
-import { reconocerTexto, type OcrProgress } from "../../integrations/ocr";
+import { describirProgreso, reconocerTexto, type OcrProgress } from "../../integrations/ocr";
 import { fuentesAgenda } from "../agendaContext";
 import { attempt, delBtn, emptyLi, esc, formValues, kidOptions, optionsHtml, qs, toast } from "../dom";
 import type { View } from "../router";
@@ -27,13 +27,6 @@ const FIELD_LABELS: Record<string, string> = {
 };
 const DURACION_DEFECTO = 60;
 const DURACIONES: Array<[string, string]> = [["15", "15 min"], ["30", "30 min"], ["45", "45 min"], ["60", "1 h"], ["90", "1 h 30"], ["120", "2 h"], ["180", "3 h"]];
-const OCR_STATUS: Record<string, string> = {
-  "loading tesseract core": "Cargando el lector de texto…",
-  "loading language traineddata": "Cargando el idioma español…",
-  "initializing api": "Preparando…",
-  "recognizing text": "Leyendo la imagen…",
-};
-
 let root: HTMLElement;
 let propuestas: PropuestaUI[] = [];
 let seq = 0;
@@ -343,7 +336,7 @@ function setOcrStatus(text: string, progress: number | null = null): void {
 async function handleImage(file: File): Promise<void> {
   setOcrStatus("Preparando la imagen…", 0);
   try {
-    const texto = await reconocerTexto(file, (m: OcrProgress) => setOcrStatus(OCR_STATUS[m.status] ?? "Procesando…", m.progress ?? null));
+    const texto = await reconocerTexto(file, (m: OcrProgress) => setOcrStatus(describirProgreso(m), m.progress ?? null));
     if (!texto.trim()) return setOcrStatus("No se encontró texto. Prueba con más luz o copia el texto de la captura y pégalo arriba.");
     agregar([analizarRecibo(texto, contexto())]);
     setOcrStatus("");
