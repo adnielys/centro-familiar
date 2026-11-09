@@ -15,6 +15,8 @@
   --src-hijos: #C2410C;
   --src-bloque: #1F6F78;
   --src-google: #2563EB;
+  --fijo: #1F6F78;
+  --variable: #D97706;
   --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
   --font-display: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, sans-serif;
   --radius: 12px;
@@ -26,6 +28,7 @@
     --accent: #52B5BF; --accent-ink: #0A1312; --accent-soft: #17353A;
     --ok: #5CC48A; --warn: #E3A948; --bad: #F07167;
     --src-trabajo: #94A3B8; --src-hijos: #FB923C; --src-bloque: #52B5BF; --src-google: #60A5FA;
+    --fijo: #52B5BF; --variable: #F59E0B;
     color-scheme: dark;
   }
 }
@@ -182,6 +185,14 @@ details[open] summary { margin-bottom: 10px; }
 .split { display: flex; height: 12px; border-radius: 6px; overflow: hidden; background: var(--accent-soft); }
 .split span:first-child { background: var(--accent); }
 .split span:last-child { background: var(--warn); }
+
+.split .seg-fijo { background: var(--fijo); }
+.split .seg-variable { background: var(--variable); }
+.dot-fijo { background: var(--fijo); }
+.dot-variable { background: var(--variable); }
+.chart { width: 100%; height: auto; display: block; margin-top: 4px; }
+.row-actions { display: flex; gap: 4px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
+.row-actions.col { flex-direction: column; align-items: flex-end; gap: 2px; }
 
 /* ---------- Hijos ---------- */
 .kids { display: flex; gap: 8px; flex-wrap: wrap; }

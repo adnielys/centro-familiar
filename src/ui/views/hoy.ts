@@ -1,9 +1,10 @@
 import { huecosLibres, minutosLibres, ocupacionesDelDia } from "../../domain/agenda";
 import { MONEDAS } from "../../domain/catalog";
-import { fmtDuration, fmtMonth, monthOf, nowMinutes, toHHMM, todayISO } from "../../domain/dates";
+import { pendientesHasta } from "../../domain/fijos";
+import { addDays, fmtDate, fmtDuration, fmtMonth, monthOf, nowMinutes, toHHMM, todayISO } from "../../domain/dates";
 import { store } from "../../data/store";
 import { fuentesAgenda } from "../agendaContext";
-import { emptyLi, esc, numberFmt, qs } from "../dom";
+import { chip, emptyLi, esc, fmtMoney, numberFmt, qs } from "../dom";
 import { actividadItem, deberItem, gastoItem, tareaItem } from "../items";
 import type { View } from "../router";
 import { actividadesDelDia, deberesProximos, gastosDelMes, tareasUrgentes, totalEn } from "../selectors";
@@ -21,6 +22,7 @@ export const hoyView: View = {
       <div class="grid2">
         <div class="card"><div class="card-head"><h2>Lo que queda hoy</h2><a class="small" href="#agenda">Agenda</a></div><ul class="list" id="hoyProximo"></ul></div>
         <div class="card"><div class="card-head"><h2>Tareas vencidas y de hoy</h2></div><ul class="list" id="hoyTareas"></ul></div>
+        <div class="card" id="hoyFijosCard"><div class="card-head"><h2>Pagos fijos (7 días)</h2><a class="small" href="#gastos">Gastos fijos</a></div><ul class="list" id="hoyFijos"></ul></div>
         <div class="card"><div class="card-head"><h2>Los niños hoy</h2></div><ul class="list" id="hoyNinos"></ul></div>
         <div class="card"><div class="card-head"><h2>Deberes y exámenes (7 días)</h2></div><ul class="list" id="hoyDeberes"></ul></div>
         <div class="card"><div class="card-head"><h2>Últimos gastos</h2><a class="small" href="#registrar">Registrar</a></div><ul class="list" id="hoyGastos"></ul></div>
@@ -52,6 +54,12 @@ export const hoyView: View = {
     ].sort((a, b) => a.t - b.t);
     qs("#hoyProximo", root).innerHTML = proximo.length ? proximo.map((x) => x.html).join("") : emptyLi("Nada más por hoy.");
 
+    const fijos = pendientesHasta(store.data.fijos, store.data.gastos, today, addDays(today, 7));
+    qs("#hoyFijosCard", root).hidden = !store.data.fijos.length;
+    qs("#hoyFijos", root).innerHTML = fijos.length
+      ? fijos.map(({ fijo, fecha, vencido }) => `<li><div class="grow"><div class="title">${esc(fijo.nombre)}</div><div class="chips">${chip(vencido ? `Vencido · ${fmtDate(fecha)}` : fecha === today ? "Hoy" : fmtDate(fecha), vencido ? "bad" : "warn")}</div></div>
+          <div class="row-actions col"><span class="amount">${esc(fmtMoney(fijo.monto, fijo.moneda))}</span><button class="icon-btn accent" type="button" data-pagar-fijo="${esc(fijo.id)}">Registrar pago</button></div></li>`).join("")
+      : emptyLi("Ningún pago fijo pendiente esta semana.");
     qs("#hoyTareas", root).innerHTML = urgentes.length ? urgentes.map((t) => tareaItem(t, today, { agendar: true })).join("") : emptyLi("Nada vencido ni para hoy.");
     const ninos = actividadesDelDia(today);
     qs("#hoyNinos", root).innerHTML = ninos.length ? ninos.map(actividadItem).join("")

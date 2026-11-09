@@ -8,7 +8,8 @@ import { fmtLongDate, todayISO } from "./domain/dates";
 import type { CollectionName } from "./domain/types";
 import { COLLECTION_NAMES } from "./domain/types";
 import { store } from "./data/store";
-import { attempt, qs, toast } from "./ui/dom";
+import { attempt, confirmTap, qs, toast } from "./ui/dom";
+import { pagarFijo } from "./ui/fijosActions";
 import { startRouter } from "./ui/router";
 import { agendaView, agendarTarea } from "./ui/views/agenda";
 import { ajustesView } from "./ui/views/ajustes";
@@ -27,18 +28,7 @@ function bindDelete(): void {
     if (!btn) return;
     const col = btn.dataset.del;
     const id = btn.dataset.id;
-    if (!isCollection(col) || !id) return;
-    if (!btn.dataset.armed) {
-      btn.dataset.armed = "1";
-      btn.dataset.label = btn.textContent ?? "";
-      btn.textContent = "¿Seguro?";
-      setTimeout(() => {
-        if (!btn.isConnected) return;
-        delete btn.dataset.armed;
-        btn.textContent = btn.dataset.label ?? "Borrar";
-      }, 3000);
-      return;
-    }
+    if (!isCollection(col) || !id || !confirmTap(btn)) return;
     void attempt(() => store.remove(col, id), "Eliminado");
   });
 }
@@ -56,6 +46,17 @@ function bindToggle(): void {
         ? store.update("tareas", id, { estado: hecha ? "hecha" : "pendiente", completada: hecha ? new Date().toISOString() : null })
         : store.update("deberes", id, { estado: hecha ? "hecha" : "pendiente" }),
     );
+  });
+}
+
+/** "Registrar pago" de un gasto fijo (Hoy y Gastos), en dos toques mostrando el importe. */
+function bindPagarFijo(): void {
+  document.addEventListener("click", (e) => {
+    const btn = (e.target as HTMLElement).closest<HTMLButtonElement>("[data-pagar-fijo]");
+    const fijo = btn ? store.byId("fijos", btn.dataset.pagarFijo) : undefined;
+    if (!btn || !fijo) return;
+    if (!confirmTap(btn, `¿Pagar ${fijo.monto} ${fijo.moneda}?`)) return;
+    void attempt(() => pagarFijo(fijo), `Pago registrado: ${fijo.nombre}`);
   });
 }
 
@@ -79,6 +80,7 @@ async function main(): Promise<void> {
   bindDelete();
   bindToggle();
   bindAgendar();
+  bindPagarFijo();
   startRouter([hoyView, agendaView, registrarView, tareasView, gastosView, hijosView, ajustesView], qs("#nav"), qs("#appMain"));
 
   // Pide almacenamiento persistente para que el sistema no borre los datos por falta de espacio.

@@ -10,7 +10,10 @@ export type Prioridad = "alta" | "media" | "baja";
 export type Estado = "pendiente" | "hecha";
 export type TipoActividad = "escuela" | "extraescolar" | "deporte" | "medico" | "otro";
 export type TipoDeber = "deber" | "examen" | "proyecto";
-export type OrigenGasto = "manual" | "texto" | "ocr";
+export type OrigenGasto = "manual" | "texto" | "ocr" | "fijo";
+/** Fijo = gasto base comprometido (colegiaturas, clases, renta…); variable = el resto. */
+export type Naturaleza = "fijo" | "variable";
+export type Frecuencia = "mensual" | "quincenal" | "semanal";
 
 export interface Entity {
   id: string;
@@ -43,6 +46,9 @@ export interface Gasto extends Entity {
   fecha: ISODate;
   hijoId: string | null;
   origen: OrigenGasto;
+  naturaleza: Naturaleza;
+  /** Gasto fijo del que es un pago, si aplica. */
+  fijoId: string | null;
 }
 
 export interface Actividad extends Entity {
@@ -67,6 +73,20 @@ export interface Deber extends Entity {
   entrega: ISODate;
   descripcion: string;
   estado: Estado;
+}
+
+/** Compromiso de pago recurrente (clases, colegiatura, renta, niñera…). */
+export interface GastoFijo extends Entity {
+  nombre: string;
+  monto: number;
+  moneda: Moneda;
+  metodo: Metodo;
+  categoria: string;
+  frecuencia: Frecuencia;
+  /** mensual/quincenal: día del mes (1–31); semanal: día ISO de la semana (1 = lunes … 7 = domingo). */
+  diaPago: number;
+  hijoIds: string[];
+  activo: boolean;
 }
 
 /** Regla aprendida de una corrección: patrón de texto → categoría. */
@@ -102,10 +122,11 @@ export interface Collections {
   deberes: Deber;
   reglas: Regla;
   bloques: Bloque;
+  fijos: GastoFijo;
 }
 
 export type CollectionName = keyof Collections;
-export const COLLECTION_NAMES: readonly CollectionName[] = ["hijos", "tareas", "gastos", "actividades", "deberes", "reglas", "bloques"];
+export const COLLECTION_NAMES: readonly CollectionName[] = ["hijos", "tareas", "gastos", "actividades", "deberes", "reglas", "bloques", "fijos"];
 
 export const DEFAULT_CONFIG: Config = {
   monedaPrincipal: "CUP",

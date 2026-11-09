@@ -21,7 +21,7 @@ interface PropuestaUI extends Propuesta {
 
 const TIPO_LABEL: Record<TipoPropuesta, string> = { gasto: "Gasto", tarea: "Tarea", deber: "Deber o examen" };
 const FIELD_LABELS: Record<string, string> = {
-  monto: "Monto", moneda: "Moneda", metodo: "Método", categoria: "Categoría", descripcion: "Descripción", fecha: "Fecha", hijoId: "Hijo",
+  monto: "Monto", moneda: "Moneda", naturaleza: "Tipo de gasto", metodo: "Método", categoria: "Categoría", descripcion: "Descripción", fecha: "Fecha", hijoId: "Hijo",
   titulo: "Tarea", area: "Área", prioridad: "Prioridad", vence: "Fecha", hora: "Hora (para agendar)", duracion: "Duración", materia: "Materia", tipo: "Tipo", entrega: "Para el día",
 };
 const DURACION_DEFECTO = 60;
@@ -40,10 +40,32 @@ let seq = 0;
 const contexto = (): ContextoClasificador => ({ hoy: todayISO(), hijos: store.data.hijos, reglas: store.data.reglas, monedaPorDefecto: store.config.monedaPrincipal });
 
 function agregar(resultados: Propuesta[]): void {
-  const conDefectos = resultados.map((r) => (r.tipo === "tarea" && !r.datos.duracion ? { ...r, datos: { ...r.datos, duracion: DURACION_DEFECTO } } : r));
+  const conDefectos = resultados.map(completarPropuesta);
   propuestas = conDefectos.map((r) => ({ ...r, uid: `p${++seq}`, sugerida: r.tipo === "gasto" ? String(r.datos.categoria ?? "") : null })).concat(propuestas);
   renderPropuestas();
 }
+/** Valores por defecto y vínculo con gastos fijos (sin IA: coincidencia de nombre). */
+function completarPropuesta(r: Propuesta): Propuesta {
+  if (r.tipo === "tarea" && !r.datos.duracion) return { ...r, datos: { ...r.datos, duracion: DURACION_DEFECTO } };
+  if (r.tipo !== "gasto") return r;
+  const fijo = fijoCoincidente(String(r.datos.descripcion ?? ""), String(r.datos.moneda ?? ""));
+  if (!fijo) return { ...r, datos: { ...r.datos, naturaleza: "variable", fijoId: null } };
+  return {
+    ...r,
+    datos: { ...r.datos, naturaleza: "fijo", fijoId: fijo.id, categoria: fijo.categoria, hijoId: r.datos.hijoId || (fijo.hijoIds.length === 1 ? fijo.hijoIds[0] : null) },
+    explicacion: `Coincide con el gasto fijo «${fijo.nombre}»: se registrará como su pago.`,
+  };
+}
+
+const norm = (s: string): string => s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+
+/** Gasto fijo activo cuyo nombre aparece en la descripción (o al revés), en la misma moneda. */
+function fijoCoincidente(descripcion: string, moneda: string) {
+  const d = norm(descripcion);
+  if (d.length < 3) return undefined;
+  return store.data.fijos.find((f) => f.activo && f.moneda === moneda && (d.includes(norm(f.nombre)) || norm(f.nombre).includes(d)));
+}
+
 function quitar(uid: string): void {
   propuestas = propuestas.filter((p) => p.uid !== uid);
   renderPropuestas();
@@ -147,7 +169,9 @@ function fieldsHtml(p: PropuestaUI): string {
       <div class="row">${field(p, "metodo", select("metodo", Object.entries(METODOS)))}
         ${field(p, "categoria", select("categoria", CATEGORIAS.map((c) => [c, c])))}
         ${field(p, "hijoId", select("hijoId", kids))}</div>
-      ${field(p, "descripcion", input("descripcion", "text", 'maxlength="160"'))}`;
+      <div class="row">${field(p, "descripcion", input("descripcion", "text", 'maxlength="160"'))}
+        ${field(p, "naturaleza", select("naturaleza", [["variable", "Variable"], ["fijo", "Fijo (gasto base)"]]))}</div>
+      <input type="hidden" name="fijoId" value="${esc(val("fijoId"))}">`;
   }
   if (p.tipo === "tarea") {
     return `
@@ -251,7 +275,11 @@ async function guardar(uid: string): Promise<void> {
     const monto = Math.round(Number(v.monto) * 100) / 100;
     if (!(monto > 0)) return toast("Indica un monto mayor que cero.");
     if (!v.fecha) return toast("Indica la fecha del gasto.");
-    const gasto = { monto, moneda: v.moneda as Moneda, metodo: v.metodo as Metodo, categoria: v.categoria, descripcion: v.descripcion, fecha: v.fecha, hijoId, origen: p.origen };
+    const naturaleza = v.naturaleza === "fijo" ? "fijo" : "variable";
+    const gasto = {
+      monto, moneda: v.moneda as Moneda, metodo: v.metodo as Metodo, categoria: v.categoria, descripcion: v.descripcion, fecha: v.fecha, hijoId, origen: p.origen,
+      naturaleza, fijoId: naturaleza === "fijo" ? v.fijoId || null : null,
+    } as const;
     accion = async () => {
       await store.add("gastos", gasto);
       await aprender(p, gasto.categoria, gasto.descripcion);

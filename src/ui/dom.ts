@@ -85,3 +85,20 @@ export function downloadBlob(blob: Blob, filename: string): void {
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 5000);
 }
+
+/**
+ * Confirmación en dos toques para acciones destructivas o que crean datos.
+ * Primer toque: el botón pide confirmación. Devuelve true solo en el segundo toque (dentro de 3 s).
+ */
+export function confirmTap(btn: HTMLElement, pregunta = "¿Seguro?"): boolean {
+  if (btn.dataset.armed) return true;
+  btn.dataset.armed = "1";
+  btn.dataset.label = btn.textContent ?? "";
+  btn.textContent = pregunta;
+  setTimeout(() => {
+    if (!btn.isConnected) return;
+    delete btn.dataset.armed;
+    btn.textContent = btn.dataset.label ?? "";
+  }, 3000);
+  return false;
+}

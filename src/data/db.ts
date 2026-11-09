@@ -6,7 +6,8 @@ import { openDB, type DBSchema, type IDBPDatabase } from "idb";
 import { COLLECTION_NAMES, type CollectionName, type Collections, type Config } from "../domain/types";
 
 const DB_NAME = "centro-familiar";
-const DB_VERSION = 1;
+/** v2: añade el object store "fijos". */
+const DB_VERSION = 2;
 
 type Schema = DBSchema & {
   [K in CollectionName]: { key: string; value: Collections[K] };
