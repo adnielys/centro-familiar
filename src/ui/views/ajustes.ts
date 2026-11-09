@@ -8,6 +8,8 @@ import { googleCalendar } from "../../integrations/googleCalendar";
 import { actualizarTasaDeHoy, guardarTasaManual } from "../../integrations/eltoque";
 import { attempt, downloadBlob, esc, formValues, numberFmt, optionsHtml, qs, toast } from "../dom";
 import type { View } from "../router";
+import { esNativo } from "../../platform/http";
+import { avisosDisponibles, pedirPermisoAvisos, sincronizarAvisos } from "../../platform/notificaciones";
 
 let root: HTMLElement;
 
@@ -33,6 +35,17 @@ export const ajustesView: View = {
             <label for="wFin">Trabajo hasta <input id="wFin" name="wFin" type="time"></label>
           </div>
           <button class="btn" type="submit">Guardar horario</button>
+        </form>
+      </div>
+
+      <div class="card" id="avisosCard" ${avisosDisponibles() ? "" : "hidden"}>
+        <h2>Avisos</h2>
+        <form id="formAvisos" autocomplete="off">
+          <p class="small muted">El iPhone te avisa el día que vence una tarea con fecha o un gasto fijo, aunque la app esté cerrada.</p>
+          <label class="check" for="avActivo"><input type="checkbox" id="avActivo" name="avActivo"> Recibir avisos</label>
+          <label for="avHora">Hora del aviso <input id="avHora" name="avHora" type="time" required></label>
+          <button class="btn" type="submit">Guardar avisos</button>
+          <p class="small muted" id="avEstado"></p>
         </form>
       </div>
 
@@ -90,7 +103,7 @@ export const ajustesView: View = {
         </div>
       </div>
 
-      <div class="card">
+      <div class="card" ${esNativo() ? "hidden" : ""}>
         <h2>Instalar en el teléfono</h2>
         <ul class="steps small">
           <li><strong>iPhone:</strong> abre esta dirección en <strong>Safari</strong> → botón Compartir → «Añadir a pantalla de inicio».</li>
@@ -108,6 +121,21 @@ export const ajustesView: View = {
       const activo = qs<HTMLInputElement>("#wActivo", form).checked;
       if (activo && v.wFin <= v.wInicio) return toast("El final del trabajo debe ser posterior al inicio.");
       void attempt(() => store.saveConfig({ jornada: { inicio: v.jInicio, fin: v.jFin }, trabajo: { activo, dias, inicio: v.wInicio, fin: v.wFin } }), "Horario guardado");
+    });
+
+    qs<HTMLFormElement>("#formAvisos", el).addEventListener("submit", (e) => {
+      e.preventDefault();
+      const form = e.target as HTMLFormElement;
+      const activo = qs<HTMLInputElement>("#avActivo", form).checked;
+      const hora = formValues(form).avHora;
+      void attempt(async () => {
+        if (activo && !(await pedirPermisoAvisos())) {
+          throw new Error("Permiso denegado. Actívalo en Ajustes del iPhone → Centro Familiar → Notificaciones.");
+        }
+        await store.saveConfig({ avisos: { activo, hora } });
+        const n = await sincronizarAvisos();
+        qs("#avEstado", form).textContent = activo ? `${n} aviso(s) programado(s).` : "Avisos desactivados.";
+      }, "Avisos guardados");
     });
 
     qs<HTMLFormElement>("#formTasaManual", el).addEventListener("submit", (e) => {
@@ -177,7 +205,7 @@ export const ajustesView: View = {
       : googleCalendar.isConnected()
         ? `<span class="chip ok">Conectado</span>`
         : `<span class="muted">Configurado, sin conectar.</span>`;
-    const standalone = window.matchMedia("(display-mode: standalone)").matches || (navigator as Navigator & { standalone?: boolean }).standalone === true;
+    const standalone = esNativo() || window.matchMedia("(display-mode: standalone)").matches || (navigator as Navigator & { standalone?: boolean }).standalone === true;
     qs("#installState", root).textContent = standalone ? "✓ Estás usando la app instalada." : "Ahora mismo la estás usando desde el navegador.";
   },
 };
@@ -207,4 +235,6 @@ function fillForms(): void {
   qs<HTMLInputElement>("#gClient", root).value = c.googleClientId;
   qs<HTMLInputElement>("#eltToken", root).value = c.cambio.eltoqueToken;
   qs<HTMLInputElement>("#eltProxy", root).value = c.cambio.proxyUrl;
+  qs<HTMLInputElement>("#avActivo", root).checked = c.avisos.activo;
+  qs<HTMLInputElement>("#avHora", root).value = c.avisos.hora;
 }

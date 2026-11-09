@@ -8,6 +8,7 @@ import { parseTasaUSD, ventanaDeHoy } from "../domain/cambio";
 import { todayISO } from "../domain/dates";
 import type { Config } from "../domain/types";
 import { store } from "../data/store";
+import { esNativo, getJSON, type RespuestaJSON } from "../platform/http";
 
 const API = "https://tasas.eltoque.com/v1/trmi";
 
@@ -21,18 +22,21 @@ export async function consultarTasaUSD(cambio: Config["cambio"], ahora = new Dat
   const usarProxy = Boolean(cambio.proxyUrl);
   if (!usarProxy && !cambio.eltoqueToken) throw new ErrorTasa("Configura tu token de elTOQUE o un proxy en Ajustes.");
   const url = `${usarProxy ? cambio.proxyUrl.replace(/\/$/, "") : API}?${params}`;
-  let res: Response;
+  const headers: Record<string, string> = usarProxy ? {} : { Authorization: `Bearer ${cambio.eltoqueToken.trim()}`, Accept: "application/json" };
+  let res: RespuestaJSON;
   try {
-    res = await fetch(url, { headers: usarProxy ? {} : { Authorization: `Bearer ${cambio.eltoqueToken.trim()}`, Accept: "application/json" } });
+    res = await getJSON(url, headers);
   } catch {
     throw new ErrorTasa(usarProxy
       ? "No se pudo conectar con tu proxy. Revisa la URL o tu conexión."
-      : "El navegador no pudo conectar con elTOQUE (sin conexión o la API no admite llamadas directas desde apps web). Usa el proxy o la tasa manual.");
+      : esNativo()
+        ? "No se pudo conectar con elTOQUE. Revisa tu conexión."
+        : "El navegador no pudo conectar con elTOQUE (sin conexión o la API no admite llamadas directas desde apps web). Usa el proxy o la tasa manual.");
   }
   if (res.status === 401 || res.status === 403) throw new ErrorTasa("elTOQUE rechazó el token. Revisa que esté bien copiado.");
   if (res.status === 429) throw new ErrorTasa("Demasiadas consultas a elTOQUE. Inténtalo en unos minutos.");
-  if (!res.ok) throw new ErrorTasa(`elTOQUE respondió ${res.status}.`);
-  const usd = parseTasaUSD(await res.json().catch(() => null));
+  if (res.status < 200 || res.status >= 300) throw new ErrorTasa(`elTOQUE respondió ${res.status}.`);
+  const usd = parseTasaUSD(res.data);
   if (!usd) throw new ErrorTasa("La respuesta de elTOQUE no trae la tasa del USD.");
   return usd;
 }

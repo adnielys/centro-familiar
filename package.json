@@ -12,10 +12,15 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@capacitor/app": "8.1.2",
+    "@capacitor/core": "8.5.3",
+    "@capacitor/ios": "8.5.3",
+    "@capacitor/local-notifications": "8.3.1",
     "idb": "8.0.0",
     "tesseract.js": "5.1.1"
   },
   "devDependencies": {
+    "@capacitor/cli": "8.5.3",
     "typescript": "5.6.3",
     "vite": "5.4.10",
     "vite-plugin-pwa": "0.20.5",

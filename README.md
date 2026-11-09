@@ -27,8 +27,12 @@ src/
   integrations/
     ocr.ts            Tesseract (WebAssembly) bajo demanda, imagen preprocesada en canvas
     googleCalendar.ts Google Identity Services + Calendar API (solo lectura, sin backend)
+  platform/      Diferencias web / app nativa (Capacitor)
+    http.ts           fetch en web; CapacitorHttp en iOS (sin CORS)
+    notificaciones.ts Avisos locales programados (solo app nativa)
   ui/            Vistas (mount una vez + update en cada cambio), router por hash, utilidades
-tests/           Vitest: clasificador y agenda
+ios/             Proyecto Xcode generado por Capacitor (Swift Package Manager)
+tests/           Vitest: todo el dominio
 ```
 
 Decisiones:
@@ -38,7 +42,7 @@ Decisiones:
 
 ## Desarrollo
 
-Requisitos: Node 20+.
+Requisitos: Node 22+.
 
 ```bash
 npm install
@@ -98,8 +102,44 @@ La app suma tus gastos en CUP y USD en una sola moneda usando la **TRMI de elTOQ
 
 Según las condiciones de elTOQUE, donde se muestra la tasa automática se cita a elTOQUE como fuente.
 
+## App iOS (sin Mac)
+
+La misma app web va empaquetada con **Capacitor 8** en `ios/`. GitHub compila en un Mac en la nube (gratis en repos públicos), así que no hace falta Mac.
+
+En la app nativa, además de todo lo de la web:
+- **Avisos** (Ajustes → Avisos): el iPhone avisa a la hora elegida el día que vence una tarea con fecha o un gasto fijo, con la app cerrada. Se reprograman solos al cambiar los datos (máximo 60, límite de iOS).
+- **elTOQUE sin proxy**: la consulta sale desde iOS (CapacitorHttp), sin el bloqueo CORS del navegador.
+- Sin service worker (los archivos ya van dentro de la app). Los datos de la app nativa son **independientes** de los de la web instalada: pásalos con Ajustes → Exportar / Importar.
+- Limitación: el inicio de sesión de Google Calendar (ventana emergente) no funciona dentro de la app; úsalo desde la versión web.
+
+### Compilación automática
+
+Cada push a `main` lanza el workflow **iOS** (`.github/workflows/ios.yml`): tests → build web → `cap sync` → `xcodebuild` sin firma → artefacto `CentroFamiliar-ipa` (pestaña Actions → la ejecución → *Artifacts*).
+
+Apple no deja instalar nada sin firma. Dos caminos:
+
+**Opción 1 — Gratis, con tu Apple ID (desde Windows)**
+1. Descarga el artefacto y descomprímelo: obtienes `CentroFamiliar-sin-firmar.ipa`.
+2. Instala [Sideloadly](https://sideloadly.io) (o AltStore) en un PC con Windows e iTunes/iCloud de la web de Apple.
+3. Conecta el iPhone por cable, arrastra el `.ipa`, escribe tu Apple ID y pulsa *Start*.
+4. En el iPhone: Ajustes → General → VPN y gestión de dispositivos → confía en tu Apple ID. En iOS 16+ activa también Ajustes → Privacidad y seguridad → **Modo desarrollador**.
+5. La firma gratuita **caduca a los 7 días**: hay que repetir el paso 3 (los datos se conservan si reinstalas encima).
+
+**Opción 2 — TestFlight (Apple Developer, 99 USD/año)**
+1. Date de alta en developer.apple.com. En App Store Connect crea la app con el bundle ID `com.adnielys.centrofamiliar`.
+2. App Store Connect → Usuarios y acceso → Integraciones → **Claves de API**: crea una con rol *App Manager*, descarga el `.p8` y anota *Key ID* e *Issuer ID*.
+3. En GitHub → Settings → Secrets and variables → Actions crea: `APPLE_TEAM_ID`, `ASC_KEY_ID`, `ASC_ISSUER_ID` y `ASC_KEY_P8_BASE64` (el `.p8` en base64: `base64 -w0 AuthKey_XXXX.p8` o `[Convert]::ToBase64String([IO.File]::ReadAllBytes("AuthKey_XXXX.p8"))` en PowerShell).
+4. Actions → **iOS TestFlight** → *Run workflow*. Firma automáticamente en la nube de Apple y sube la versión; en unos minutos aparece en la app TestFlight del iPhone. Sin caducidad de 7 días (cada build dura 90 días).
+
+### Desarrollo nativo
+
+```bash
+npm run build && npx cap sync ios   # copia dist/ al proyecto iOS
+```
+`ios/App/App/public` y `capacitor.config.json` se generan en cada `sync` (no se versionan). Icono: `ios/App/App/Assets.xcassets/AppIcon.appiconset` (1024×1024, sin transparencia).
+
 ## Hoja de ruta
 
 1. **Sincronización entre dispositivos**: backend NestJS + PostgreSQL (Docker) con API REST; el `store` ya centraliza las escrituras, así que se añade un adaptador de sincronización sin tocar las vistas. Permitiría también refresh tokens de Google y que agentes externos lean los datos.
-2. **App nativa sin Mac**: empaquetar con **Capacitor** y compilar iOS en la nube (Codemagic o Ionic Appflow). Android: APK instalable directamente. iOS: requiere cuenta de Apple Developer (99 USD/año) para TestFlight.
-3. Notificaciones de recordatorio (Web Push; en iOS solo con la app instalada, iOS 16.4+).
+2. **Android nativo**: `npx cap add android` + workflow que genere un APK instalable directamente.
+3. Avisos en la versión web (Web Push; requiere servidor).

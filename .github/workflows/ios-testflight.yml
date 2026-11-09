@@ -1,0 +1,92 @@
+# Publica la app en TestFlight (requiere cuenta Apple Developer, 99 USD/año).
+# Se lanza a mano: Actions → «iOS TestFlight» → Run workflow.
+# Secretos necesarios (Settings → Secrets and variables → Actions):
+#   APPLE_TEAM_ID       Team ID de tu cuenta de desarrollador (10 caracteres)
+#   ASC_KEY_ID          Key ID de la clave de API de App Store Connect
+#   ASC_ISSUER_ID       Issuer ID de esa clave
+#   ASC_KEY_P8_BASE64   Contenido del archivo AuthKey_XXXX.p8 en base64
+# La firma es automática en la nube de Apple (no hace falta Mac ni certificados a mano).
+name: iOS TestFlight
+
+on:
+  workflow_dispatch:
+
+jobs:
+  testflight:
+    runs-on: macos-15
+    timeout-minutes: 40
+    env:
+      TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      KEY_ID: ${{ secrets.ASC_KEY_ID }}
+      ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+      KEY_P8: ${{ secrets.ASC_KEY_P8_BASE64 }}
+    steps:
+      - name: Comprobar secretos
+        run: |
+          for v in TEAM_ID KEY_ID ISSUER_ID KEY_P8; do
+            if [ -z "${!v}" ]; then
+              echo "::error::Falta el secreto para $v. Ver README → App iOS → TestFlight."
+              exit 1
+            fi
+          done
+
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Seleccionar Xcode 26
+        run: sudo xcode-select -s "$(ls -d /Applications/Xcode_26*.app | sort -V | tail -1)"
+
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+      - run: npx cap sync ios
+
+      - name: Clave de App Store Connect
+        run: |
+          mkdir -p "$RUNNER_TEMP/keys"
+          echo "$KEY_P8" | base64 --decode > "$RUNNER_TEMP/keys/AuthKey.p8"
+          echo "KEY_PATH=$RUNNER_TEMP/keys/AuthKey.p8" >> "$GITHUB_ENV"
+
+      - name: Archivar
+        run: |
+          xcodebuild archive \
+            -project ios/App/App.xcodeproj \
+            -scheme App \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -archivePath "$RUNNER_TEMP/App.xcarchive" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$KEY_PATH" \
+            -authenticationKeyID "$KEY_ID" \
+            -authenticationKeyIssuerID "$ISSUER_ID" \
+            DEVELOPMENT_TEAM="$TEAM_ID" \
+            CODE_SIGN_STYLE=Automatic \
+            CURRENT_PROJECT_VERSION="${{ github.run_number }}"
+
+      - name: Subir a TestFlight
+        run: |
+          cat > "$RUNNER_TEMP/ExportOptions.plist" <<PLIST
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0"><dict>
+            <key>method</key><string>app-store-connect</string>
+            <key>destination</key><string>upload</string>
+            <key>teamID</key><string>${TEAM_ID}</string>
+            <key>signingStyle</key><string>automatic</string>
+          </dict></plist>
+          PLIST
+          xcodebuild -exportArchive \
+            -archivePath "$RUNNER_TEMP/App.xcarchive" \
+            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" \
+            -exportPath "$RUNNER_TEMP/export" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$KEY_PATH" \
+            -authenticationKeyID "$KEY_ID" \
+            -authenticationKeyIssuerID "$ISSUER_ID"
+
+      - name: Limpiar clave
+        if: always()
+        run: rm -rf "$RUNNER_TEMP/keys"

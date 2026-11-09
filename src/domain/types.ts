@@ -159,6 +159,8 @@ export interface Config {
   googleClientId: string;
   /** Tipo de cambio: token personal de elTOQUE y/o URL de un proxy propio (si el navegador no puede llamar directo). */
   cambio: { eltoqueToken: string; proxyUrl: string };
+  /** Avisos locales (solo en la app nativa): hora del aviso el día del vencimiento. */
+  avisos: { activo: boolean; hora: HHMM };
 }
 
 export interface Collections {
@@ -183,4 +185,5 @@ export const DEFAULT_CONFIG: Config = {
   trabajo: { activo: true, dias: [1, 2, 3, 4, 5], inicio: "09:00", fin: "17:00" },
   googleClientId: "",
   cambio: { eltoqueToken: "", proxyUrl: "" },
+  avisos: { activo: false, hora: "09:00" },
 };

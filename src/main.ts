@@ -11,6 +11,8 @@ import { store } from "./data/store";
 import { attempt, confirmTap, qs, toast } from "./ui/dom";
 import { pagarFijo } from "./ui/fijosActions";
 import { actualizarSiHaceFalta } from "./integrations/eltoque";
+import { esNativo } from "./platform/http";
+import { iniciarAvisos } from "./platform/notificaciones";
 import { ICONS } from "./ui/icons";
 import { startRouter } from "./ui/router";
 import { alternarTarea, registrarGastoDeHecha } from "./ui/tareaActions";
@@ -116,9 +118,14 @@ async function main(): Promise<void> {
   // Pide almacenamiento persistente para que el sistema no borre los datos por falta de espacio.
   void navigator.storage?.persist?.();
 
-  registerSW({
-    onOfflineReady: () => toast("Lista para usarse sin conexión"),
-  });
+  // En la app nativa los archivos ya van dentro del paquete: el service worker sobra (y en WKWebView da problemas).
+  if (esNativo()) {
+    iniciarAvisos();
+  } else {
+    registerSW({
+      onOfflineReady: () => toast("Lista para usarse sin conexión"),
+    });
+  }
 
   // A medianoche (o al volver a la app otro día) refresca "hoy".
   let dia = todayISO();
