@@ -20,8 +20,13 @@ export interface LecturaTicket {
   diferencia: number;
 }
 
-/** Importe al final de la línea: 1,234.50 · 1.234,50 · $25.00 · 25,00 A · 5.00- */
-const PRECIO_FINAL = /(-?)\$?\s?(\d{1,3}(?:[.,]\d{3})*[.,]\d{2}|\d+[.,]\d{2})\s*(-?)\s*[A-Z*]{0,2}\s*$/i;
+/**
+ * Importe al final de la línea: 1,234.50 · 1.234,50 · $25.00 · 25,00 A · 5.00- · 6 240.0 · 12 100.00
+ * Los tickets de cajas cubanas separan los miles con espacio y a veces imprimen un solo decimal.
+ * El grupo con espacio admite 1–2 cifras delante ("6 240.0") para no pegar una cantidad o un
+ * formato al precio ("Coca cola 600 370.00" es 370, no 600 370).
+ */
+const PRECIO_FINAL = /(-?)\$?\s?(?<![\d.,])(\d{1,2}(?: \d{3})+[.,]\d{1,2}|\d{1,3}(?:[.,]\d{3})+[.,]\d{1,2}|\d+[.,]\d{1,2})\s*(-?)\s*[A-Z*]{0,2}\s*$/i;
 
 /** Líneas que no son artículos (pagos, totales, impuestos, datos del ticket). */
 const NO_ARTICULO = /\b(sub\s?-?total|total|iva|i\.v\.a|impuesto|tax|ieps|cambio|su cambio|efectivo|cash|tarjeta|card|visa|master\s?card|amex|debito|credito|pago|pagado|recibido|vuelto|change|saldo|balance|puntos|monedero|ahorr\w*|articulos|items|propina|redondeo|aprob\w*|autoriz\w*|referencia|folio|transac\w*|rfc|tel\b|telefono|caja|cajero|tienda|sucursal|gracias)\b/;
@@ -37,18 +42,19 @@ const normalizar = (s: string): string => s.toLowerCase().normalize("NFD").repla
 const letras = (s: string): number => (s.match(/[a-záéíóúñ]/gi) ?? []).length;
 const redondear = (n: number): number => Math.round(n * 100) / 100;
 
-/** "1,234.50" → 1234.5 · "1.234,50" → 1234.5 · "25,00" → 25 */
+/** "1,234.50" → 1234.5 · "1.234,50" → 1234.5 · "25,00" → 25 · "6 240.0" → 6240 */
 export function parsePrecio(raw: string): number | null {
   const s = raw.replace(/[\s$]/g, "");
-  const m = /^(\d{1,3}(?:[.,]\d{3})*|\d+)[.,](\d{2})$/.exec(s);
+  const m = /^(\d{1,3}(?:[.,]\d{3})*|\d+)[.,](\d{1,2})$/.exec(s);
   if (!m) return null;
   const entero = Number(m[1].replace(/[.,]/g, ""));
-  return Number.isFinite(entero) ? redondear(entero + Number(m[2]) / 100) : null;
+  return Number.isFinite(entero) ? redondear(entero + Number(`0.${m[2]}`)) : null;
 }
 
 /** Limpia la descripción: quita códigos de barras, SKU, cantidades y símbolos sueltos. */
 export function limpiarDescripcion(raw: string): string {
   const s = raw
+    .replace(/^[\s—–\-.:;,]+|[\s—–\-.:;,]+$/g, "") // rayas y puntuación sueltas del OCR
     .replace(/\b\d{6,}\b/g, " ")          // códigos de barras / SKU
     .replace(/^\s*\d{1,4}\s+(?=[a-z])/i, " ") // código corto o cantidad al inicio
     .replace(/[|_*#=~<>]+/g, " ")
@@ -98,6 +104,7 @@ export function leerTicket(texto: string): LecturaTicket {
     }
     if (precio === null) {
       // Descripción en una línea y el precio en la siguiente (tickets estrechos).
+      if (DESCUENTO.test(n)) continue;
       pendiente = letras(linea) >= 3 && !CANTIDAD.test(linea) ? linea : pendiente;
       continue;
     }

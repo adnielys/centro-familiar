@@ -32,6 +32,12 @@ describe("parsePrecio", () => {
     expect(parsePrecio("$89.90")).toBe(89.9);
     expect(parsePrecio("300")).toBeNull();
   });
+
+  it("entiende miles separados por espacio y un solo decimal (cajas cubanas)", () => {
+    expect(parsePrecio("6 240.0")).toBe(6240);
+    expect(parsePrecio("12 100.00")).toBe(12100);
+    expect(parsePrecio("25,5")).toBe(25.5);
+  });
 });
 
 describe("limpiarDescripcion", () => {
@@ -79,6 +85,86 @@ describe("leerTicket", () => {
 
   it("sin artículos legibles devuelve lista vacía", () => {
     expect(leerTicket("texto borroso\n???").articulos).toEqual([]);
+  });
+});
+
+/** Ticket de una cafetería cubana: cantidad delante, miles con espacio, un decimal y domicilio aparte. */
+const CAFETERIA = `
+SANTA BARBARA SURL
+Le atiende: Cajero Ricardo
+Cajero: Cajero Ricardo
+Cliente: lisandra - 23 mar. 2026
+14:14
+Mesa: MESA15
+Fecha: 10/11/2026
+- - - - - - - - - - - - - -
+4 PIZZA MARGARITA 6 240.0
+6 DOMICILIO 0.00
+1 RAC CEBOLLA 300.00
+1 MALTA VAN PUR 780.00
+1 REF PINA MAX BOOMS BO 940.00
+2 SANDWICH D/ATUN 3 840.0
+- - - - - - - - - - - - - -
+DOMICILIO: 600.00
+SUBTOTAL: 12 100.00
+DESCUENTO %:
+TOTAL CUP: 12 700.00
+lisandra - 23 mar. 2026 14:14
+58070349
+piso 13 g
+`;
+
+/** Lo que Tesseract leyó de la foto real de ese ticket (con rayas y errores). */
+const CAFETERIA_OCR = `
+SANTA BARBARA SURL
+a le atiende: Cajero Ricardo
+Cajero: Cajero Ricardo
+E   Hen Visandra - 23 mar. 2026  e
+Mesa: MESAI5                      f
+Fecha: 10/11/2026                         E—.
+4 PIZZA MARGARITA 6 240.0
+—  DOMICILIO     0.00
+6
+1 RAC CEBOLLA       300.00
+1 MALTA. VAN PUR      780.00
+— E... PINA MAX B00MS BO 940.00
+2 Siomco/anin a 0d.0
+CILTO:           600.00
+— md          000
+SUBTOTAL:
+DESCUENTO %:
+TOTAL O;       700
+nr - 3 nr 28M
+`;
+
+describe("leerTicket · cafetería cubana", () => {
+  const t = leerTicket(CAFETERIA);
+
+  it("lee cada artículo con su importe, incluido el domicilio", () => {
+    expect(t.articulos).toEqual([
+      { descripcion: "Pizza margarita", monto: 6240 },
+      { descripcion: "Rac cebolla", monto: 300 },
+      { descripcion: "Malta van pur", monto: 780 },
+      { descripcion: "Ref pina max booms bo", monto: 940 },
+      { descripcion: "Sandwich d/atun", monto: 3840 },
+      { descripcion: "Domicilio", monto: 600 },
+    ]);
+  });
+
+  it("cuadra con el total impreso", () => {
+    expect(t.total).toBe(12700);
+    expect(t.suma).toBe(12700);
+    expect(t.diferencia).toBe(0);
+  });
+
+  it("no pega una cantidad o un formato al precio", () => {
+    expect(leerTicket("COCA COLA 600 370.00").articulos).toEqual([{ descripcion: "Coca cola 600", monto: 370 }]);
+  });
+
+  it("con el texto real del OCR recupera las líneas legibles", () => {
+    const r = leerTicket(CAFETERIA_OCR);
+    expect(r.articulos.map((a) => a.monto)).toEqual([6240, 300, 780, 940, 600]);
+    expect(r.articulos[0].descripcion).toBe("Pizza margarita");
   });
 });
 
