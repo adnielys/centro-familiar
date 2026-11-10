@@ -245,3 +245,9 @@ test("costo estimado: «aprox» o servicios como la luz", () => {
   assert.strictEqual(one("comprar regalo aprox 30 usd").datos.costoTipo, "estimado");
   assert.strictEqual(one("pagar inglés 1500 cada mes").datos.costoTipo, "fijo");
 });
+
+test("artículos de cafetería van a Alimentación (ticket de Santa Barbara)", () => {
+  for (const d of ["Malta van pur", "Sandwich d/atun", "Domicilio", "Ref pina max booms bo", "Pizza margarita", "Rac cebolla"]) {
+    assert.strictEqual(C.categoriaDeTexto(d, []).categoria, "Alimentación", d);
+  }
+});

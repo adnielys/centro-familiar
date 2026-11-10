@@ -18,6 +18,8 @@ export interface LecturaTicket {
   suma: number;
   /** total − suma: impuestos, redondeos o artículos que el OCR no leyó. */
   diferencia: number;
+  /** Cafetería, restaurante o paladar: lo que se compra ahí es comida casi siempre. */
+  restaurante: boolean;
 }
 
 /**
@@ -118,15 +120,36 @@ export function leerTicket(texto: string): LecturaTicket {
   }
 
   const suma = redondear(articulos.reduce((s, a) => s + a.monto, 0));
-  const referencia = total ?? subtotal;
+  // Un total muy por debajo de lo que suman los artículos es una mala lectura del OCR ("12 10.0").
+  const plausible = (n: number | null): n is number => n !== null && n >= suma / 2;
+  const referencia = [total, subtotal].find(plausible) ?? null;
   return {
     comercio: detectarComercio(lineas),
     articulos,
     total: referencia,
     suma,
     diferencia: referencia === null ? 0 : redondear(referencia - suma),
+    restaurante: esRestaurante(lineas),
   };
 }
+
+/**
+ * Muchos tickets de cafetería no lo dicen en el nombre ("Santa Barbara SURL"), pero sí en el
+ * cuerpo: número de mesa, quién atiende, comensales, propina o servicio a domicilio.
+ */
+const RESTAURANTE_NOMBRE = /\b(cafeteria|cafe|restaurante?|paladar|pizzeria|bar|burger|snack|dulceria|panaderia|heladeria|parrillada|ranchon|fonda|comedor)\b/;
+const RESTAURANTE_PISTA = /^(mesa\s*:|le atiende\b|mesero\b|camarero\b|dependiente\s*:|comensales\b|propina\b|servicio\s*:|domicilio\s*:)/;
+
+function esRestaurante(lineas: readonly string[]): boolean {
+  const normalizadas = lineas.map(normalizar);
+  // El nombre se busca solo en la cabecera sin importes, para no confundir "CAFE 1KG 250.00" de un súper.
+  return normalizadas.slice(0, 4).some((l) => !PRECIO_FINAL.test(l) && RESTAURANTE_NOMBRE.test(l))
+    || normalizadas.some((l) => RESTAURANTE_PISTA.test(l.replace(/^[^a-z]+/, "")));
+}
+
+/** Categoría para lo que el diccionario no reconoce: en súper y cafeterías, comida. */
+export const categoriaPorDefecto = (l: Pick<LecturaTicket, "comercio" | "restaurante">): "Alimentación" | "Otros" =>
+  esSupermercado(l.comercio) || l.restaurante ? "Alimentación" : "Otros";
 
 function detectarComercio(lineas: readonly string[]): string | null {
   const conocido = lineas.slice(0, 8).map((l) => SUPERMERCADOS.exec(l)?.[0]).find(Boolean);

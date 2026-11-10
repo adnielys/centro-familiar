@@ -5,7 +5,7 @@
 import { CATEGORIAS, METODOS, MONEDAS } from "../domain/catalog";
 import { categoriaDeTexto, idDeRegla, patronDeAprendizaje } from "../domain/clasificador.js";
 import { todayISO } from "../domain/dates";
-import { esSupermercado, gastosDeTicket, MODOS_TICKET, type LecturaTicket, type LineaRevisada, type ModoTicket } from "../domain/ticket";
+import { categoriaPorDefecto, gastosDeTicket, MODOS_TICKET, type LecturaTicket, type LineaRevisada, type ModoTicket } from "../domain/ticket";
 import type { Metodo, Moneda } from "../domain/types";
 import { store } from "../data/store";
 import { attempt, esc, fmtMoney, optionsHtml, qs, seg, toast } from "./dom";
@@ -25,7 +25,7 @@ interface LineaUI extends LineaRevisada {
 
 export function abrirRevisionTicket(lectura: LecturaTicket, texto: string, sugerido: Sugerencias): void {
   const reglas = store.data.reglas;
-  const porDefecto = esSupermercado(lectura.comercio) ? "Alimentación" : "Otros";
+  const porDefecto = categoriaPorDefecto(lectura);
   const lineas: LineaUI[] = lectura.articulos.map((a) => {
     const { categoria } = categoriaDeTexto(a.descripcion, reglas);
     const elegida = categoria === "Otros" ? porDefecto : categoria;

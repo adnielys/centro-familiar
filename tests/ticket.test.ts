@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { esSupermercado, gastosDeTicket, leerTicket, limpiarDescripcion, parsePrecio, type LineaRevisada } from "../src/domain/ticket";
+import { categoriaPorDefecto, esSupermercado, gastosDeTicket, leerTicket, limpiarDescripcion, parsePrecio, type LineaRevisada } from "../src/domain/ticket";
 
 const WALMART = `
 WALMART SUPERCENTER
@@ -137,6 +137,25 @@ TOTAL O;       700
 nr - 3 nr 28M
 `;
 
+/** OCR real de una segunda foto del mismo ticket, sobre fondo liso: lee el total como "12 10.0". */
+const CAFETERIA_OCR_FONDO_LISO = `
+SANTA BARBARA SURL
+Le atiende; Cajero Ri
+Mesa: MESAI5
+| A A AA UL
+4 PIZZA MARGARITA — 6 240.0
+6 DOMICILIO 0.00
+1 RAC CEBOLLA 300,00
+1 MALTA VAN PUR 780.00
+1 REF PINA MAX BOOMS BO 940.00
+2 SANDMICH D/ATUN- a 840.0
+DOMICILIO: 600,00
+SUBTOTAL : 12 100.00
+DESCUENTO %:
+TOTAL CIP; 12 10.0
+- - 23 mar 2006 AE
+`;
+
 describe("leerTicket · cafetería cubana", () => {
   const t = leerTicket(CAFETERIA);
 
@@ -159,6 +178,37 @@ describe("leerTicket · cafetería cubana", () => {
 
   it("no pega una cantidad o un formato al precio", () => {
     expect(leerTicket("COCA COLA 600 370.00").articulos).toEqual([{ descripcion: "Coca cola 600", monto: 370 }]);
+  });
+
+  it("descarta un total mal leído y usa el subtotal", () => {
+    const r = leerTicket(CAFETERIA_OCR_FONDO_LISO);
+    expect(r.articulos).toHaveLength(6);
+    expect(r.total).toBe(12100);
+    expect(r.diferencia).toBe(2400);
+  });
+
+  it("sin total ni subtotal creíbles no inventa referencia", () => {
+    const r = leerTicket("PAN 300.00\nLECHE 400.00\nTOTAL 7.00");
+    expect(r.total).toBeNull();
+    expect(r.diferencia).toBe(0);
+  });
+
+  it("reconoce la cafetería por la mesa y quien atiende, aunque el nombre no lo diga", () => {
+    expect(t.restaurante).toBe(true);
+    expect(leerTicket(CAFETERIA_OCR_FONDO_LISO).restaurante).toBe(true);
+    expect(categoriaPorDefecto(t)).toBe("Alimentación");
+  });
+
+  it("reconoce la cafetería por el nombre", () => {
+    expect(leerTicket("CAFETERIA LA ESQUINA\nCROISSANT 150.00").restaurante).toBe(true);
+    expect(leerTicket("PALADAR DOÑA ROSA\nPLATO DEL DIA 900.00").restaurante).toBe(true);
+  });
+
+  it("una ferretería o un súper no son restaurantes", () => {
+    const ferreteria = leerTicket("FERRETERIA EL CLAVO\nTORNILLOS 120.00\nTOTAL 120.00");
+    expect(ferreteria.restaurante).toBe(false);
+    expect(categoriaPorDefecto(ferreteria)).toBe("Otros");
+    expect(leerTicket("TIENDA LA NUEVA\nCAFE 1KG 250.00\nTOTAL 250.00").restaurante).toBe(false);
   });
 
   it("con el texto real del OCR recupera las líneas legibles", () => {
