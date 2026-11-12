@@ -19,6 +19,7 @@ import { alternarTarea, registrarGastoDeHecha } from "./ui/tareaActions";
 import { abrirTareaSheet } from "./ui/tareaSheet";
 import { agendaView, agendarTarea } from "./ui/views/agenda";
 import { ajustesView } from "./ui/views/ajustes";
+import { balanceView } from "./ui/views/balance";
 import { gastosView } from "./ui/views/gastos";
 import { hijosView } from "./ui/views/hijos";
 import { hoyView } from "./ui/views/hoy";
@@ -105,7 +106,7 @@ async function main(): Promise<void> {
   qs("#topActions").innerHTML = `
     <a class="icon-btn round" href="#hijos" data-tab="hijos" aria-label="Familia">${ICONS.familia}</a>
     <a class="icon-btn round" href="#ajustes" data-tab="ajustes" aria-label="Ajustes">${ICONS.ajustes}</a>`;
-  startRouter([hoyView, agendaView, tareasView, gastosView, registrarView, hijosView, ajustesView], {
+  startRouter([hoyView, agendaView, tareasView, gastosView, balanceView, registrarView, hijosView, ajustesView], {
     nav: qs("#nav"),
     main: qs("#appMain"),
     plusIndex: 2,

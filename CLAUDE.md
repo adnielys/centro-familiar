@@ -23,11 +23,11 @@ Antes de hacer commit: `npm run typecheck && npm test && npm run build` en verde
 
 ## Arquitectura
 ```
-src/domain/        lógica pura: agenda, fijos, tareas, periodos, balance, busqueda, cambio, recordatorios, ticket, clasificador.js (+ .d.ts)
+src/domain/        lógica pura: agenda, fijos, tareas, periodos, balance, presupuesto (promedio e ideal), busqueda, cambio, recordatorios, ticket, clasificador.js (+ .d.ts)
 src/data/          IndexedDB (db.ts, DB_VERSION), store.ts (estado + subscribe + saveConfig), migrations.ts, backup.ts
 src/integrations/  ocr.ts (Tesseract bajo demanda), eltoque.ts (tasa USD→CUP), googleCalendar.ts
 src/platform/      http.ts (fetch / CapacitorHttp), notificaciones.ts (avisos locales, solo nativo)
-src/ui/            router por hash, vistas mount/update, sheet.ts (hoja inferior), dom.ts (utilidades), *Actions.ts
+src/ui/            router por hash, vistas mount/update (Dinero = gastos.ts + balance.ts, piezas comunes en dinero.ts), sheet.ts (hoja inferior), dom.ts (utilidades), *Actions.ts
 ios/ android/      proyectos Capacitor 8.5.3 (no editar los generados en public/ ni capacitor.config.json)
 ```
 - Vistas: `mount(el)` una vez + `update()` en cada cambio del store. Eventos globales con atributos `data-*` en `main.ts`.
@@ -42,6 +42,6 @@ ios/ android/      proyectos Capacitor 8.5.3 (no editar los generados en public/
 - Commits con autor `Adnielys <adnielys.rojas89@gmail.com>`, mensajes en español.
 
 ## Estado y pendientes
-- Hecho: tareas con coste (fijo/estimado) y repetición, gastos fijos, balance y cortes mensuales, agenda con ocupado/libre, Google Calendar (solo web), elTOQUE, escaneo de tickets con artículos, avisos locales, apps iOS/Android.
+- Hecho: tareas con coste (fijo/estimado) y repetición, gastos fijos, balance y cortes mensuales (pantalla Balance aparte, con promedio de cierres e ideal por categoría), agenda con ocupado/libre, Google Calendar (solo web), elTOQUE, escaneo de tickets con artículos, avisos locales, apps iOS/Android.
 - Pendiente / ideas: sincronización entre dispositivos (backend NestJS + PostgreSQL), firma iOS (Sideloadly o TestFlight, a decidir), publicar en Google Play.
 - Limitaciones conocidas: el login de Google (popup) no funciona dentro de las apps nativas; los datos de la web y de la app nativa están separados (pasar con Exportar/Importar).

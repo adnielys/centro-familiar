@@ -23,6 +23,12 @@ export const daysInMonth = (ym: string): number => {
   const [y, m] = ym.split("-").map(Number);
   return new Date(y, m, 0).getDate();
 };
+/** "2026-01" + (−1) → "2025-12". */
+export const addMonths = (ym: string, n: number): string => {
+  const [y, m] = ym.split("-").map(Number);
+  const d = new Date(y, m - 1 + n, 1);
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}`;
+};
 
 /** "HH:MM" → minutos desde medianoche. */
 export const toMinutes = (hhmm: HHMM): number => {

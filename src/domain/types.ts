@@ -161,6 +161,8 @@ export interface Config {
   cambio: { eltoqueToken: string; proxyUrl: string };
   /** Avisos locales (solo en la app nativa): hora del aviso el día del vencimiento. */
   avisos: { activo: boolean; hora: HHMM };
+  /** Balance: cuántos meses cerrados promediar (3, 6 o 12) y el % de ahorro sobre el ideal (0, 5 o 10). */
+  presupuesto: { meses: number; ajuste: number };
 }
 
 export interface Collections {
@@ -186,4 +188,5 @@ export const DEFAULT_CONFIG: Config = {
   googleClientId: "",
   cambio: { eltoqueToken: "", proxyUrl: "" },
   avisos: { activo: false, hora: "09:00" },
+  presupuesto: { meses: 3, ajuste: 0 },
 };

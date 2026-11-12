@@ -41,3 +41,35 @@ nuevo caía en Otros. Muchos tickets cubanos no dicen "cafetería" en el nombre 
 pero sí llevan mesa y quién atiende. Se mantienen también las palabras añadidas al diccionario,
 para que esos productos salgan bien en cualquier comercio. Las correcciones manuales siguen
 creando reglas aprendidas, que tienen prioridad.
+
+## 2026-11-12 · Gastos y Balance en pantallas separadas
+
+**Decisión.** La pestaña Dinero se divide en dos pantallas con un selector arriba (Gastos | Balance):
+- **Gastos** (`#gastos`): resumen del mes que enlaza al balance, registrar gasto (abierto y
+  primero), gastos fijos (arriba solo los pendientes; pagados y pausados plegados) y movimientos
+  con su propio selector de mes.
+- **Balance** (`#balance`): mes con flechas ‹ ›, balance, promedio de cierres, ideal por
+  categoría, análisis y cortes anteriores.
+
+Balance no tiene pestaña propia en la barra inferior (la vista marca la de Dinero con `tab`).
+
+**Motivo.** La pantalla única medía más de dos alturas de móvil vacía y mucho más con datos;
+registrar un gasto, que es lo más frecuente, quedaba debajo del balance y del análisis. Una sexta
+pieza en la barra no cabe bien a 390 px y el balance se consulta menos que registrar.
+
+## 2026-11-12 · Promedio de cierres e ideal por categoría
+
+**Decisión.**
+- El promedio usa los últimos 3, 6 o 12 **meses cerrados** anteriores al mes que se mira (el mes
+  en curso no está completo). Se calcula con los gastos guardados, no con la foto del corte, que
+  solo guarda 8 categorías y mezcla base con variable.
+- El **ideal** de cada categoría es la **mediana** de su gasto variable en esos meses (un mes sin
+  gasto cuenta como 0), con un ajuste opcional de −5 % o −10 %, redondeado hacia arriba (centenas
+  en CUP, de 5 en 5 en USD). Los gastos base no tienen ideal: ya tienen su importe.
+- El **ritmo** proyecta el gasto a fin de mes desde el día 7 y avisa si pasaría el ideal en más de
+  un 5 %. Una categoría que se suele pagar de una vez al mes (luz, recarga) no se proyecta.
+- Rango y ajuste se guardan en `Config.presupuesto`.
+
+**Motivo.** La mediana evita que un mes raro (un cumpleaños) infle el ideal, cosa que haría la
+media. Antes del día 7 una sola compra grande dispara la proyección. Proyectar un pago único hecho
+el día 10 daba avisos falsos (Servicios: "a este ritmo, 6 200" con un ideal de 2 500).

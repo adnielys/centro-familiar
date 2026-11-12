@@ -318,3 +318,28 @@ input.round-check:checked::after { content: ""; width: 7px; height: 12px; border
 .tk-total { display: flex; justify-content: space-between; align-items: baseline; font-size: 17px; }
 .ticket-scan { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
 .ticket-scan input[type="file"] { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+
+/* Dinero: selector Gastos | Balance, navegación de meses y gasto ideal */
+.subnav { margin-bottom: 4px; }
+.subnav a { flex: 1; text-align: center; padding: 10px 8px; color: var(--muted); text-decoration: none; font-weight: 600; }
+.subnav a[aria-current="page"] { background: var(--accent); color: var(--accent-ink); }
+.mes-nav { display: flex; align-items: center; gap: 8px; }
+.mes-picker { position: relative; flex: 1; min-width: 0; text-align: center; font-weight: 600; padding: 10px 8px; border: 1px solid var(--line); border-radius: 10px; }
+.mes-picker span { display: inline-block; }
+.mes-picker span::first-letter { text-transform: uppercase; }
+.mes-picker input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
+.mes-nav .icon-btn { font-size: 22px; line-height: 1; padding: 6px 14px; border-color: var(--line); color: var(--ink); }
+.mes-nav .icon-btn:disabled { opacity: .35; cursor: default; }
+.mes-estado { text-align: center; }
+.resumen-mes { display: flex; align-items: center; gap: 12px; color: var(--ink); text-decoration: none; }
+.resumen-num { font-size: 18px; font-weight: 600; }
+.resumen-link { color: var(--accent); font-weight: 600; white-space: nowrap; }
+.ideal-row { display: grid; gap: 4px; padding: 10px 0; border-top: 1px solid var(--line); }
+.ideal-track { position: relative; height: 10px; border-radius: 5px; background: var(--accent-soft); }
+.ideal-fill { height: 100%; border-radius: 5px; background: var(--ok); }
+.ideal-row.atento .ideal-fill { background: var(--warn); }
+.ideal-row.pasado .ideal-fill { background: var(--bad); }
+.ideal-row.pasado .amount strong { color: var(--bad); }
+.ideal-mark { position: absolute; top: -3px; width: 2px; height: 16px; background: var(--ink); border-radius: 1px; }
+.ideal-mark-leyenda { display: inline-block; width: 2px; height: 12px; background: var(--ink); vertical-align: -1px; margin-right: 4px; }
+.ideal-total { display: grid; gap: 4px; padding-top: 10px; border-top: 1px solid var(--line); }

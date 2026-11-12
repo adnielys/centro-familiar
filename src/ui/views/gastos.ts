@@ -1,24 +1,23 @@
 /**
- * Gastos: registrar/editar, gastos fijos (compromisos recurrentes) y análisis fijo vs variable.
+ * Gastos: registrar o editar (a mano o con ticket), gastos fijos del mes y movimientos.
+ * El balance, el promedio y el ideal viven en la pantalla Balance (views/balance.ts).
  */
 import { CATEGORIAS, DIAS_CORTOS, METODOS, MONEDAS } from "../../domain/catalog";
-import { daysInMonth, fmtDate, fmtMonth, monthOf, todayISO } from "../../domain/dates";
-import { balanceDelMes, resumenDe, type Balance } from "../../domain/balance";
-import { tasaActual, totalCombinado } from "../../domain/cambio";
-import { estadoDelMes, FRECUENCIAS, historico, mesesHasta, resumenDelMes } from "../../domain/fijos";
+import { addMonths, fmtDate, fmtMonth, monthOf, todayISO } from "../../domain/dates";
+import { estadoDelMes, FRECUENCIAS } from "../../domain/fijos";
 import type { Frecuencia, Gasto, GastoFijo, Metodo, Moneda, Naturaleza } from "../../domain/types";
 import { store } from "../../data/store";
-import { barrasApiladas } from "../charts";
-import { attempt, chip, confirmTap, delBtn, emptyLi, esc, fmtMoney, formValues, kidChip, kidOptions, numberFmt, optionsHtml, qs, toast } from "../dom";
+import { attempt, chip, delBtn, emptyLi, esc, fmtMoney, formValues, kidChip, kidOptions, optionsHtml, qs, toast } from "../dom";
 import { gastoItem } from "../items";
 import { ICONS } from "../icons";
 import type { View } from "../router";
-import { gastosDelMes, sumarPor, totalEn } from "../selectors";
+import { gastosDelMes, totalEn } from "../selectors";
 import { buscarGastos, paginar } from "../../domain/busqueda";
 import { analizarRecibo } from "../../domain/clasificador.js";
 import { leerTicket } from "../../domain/ticket";
 import { describirProgreso, reconocerTexto } from "../../integrations/ocr";
 import { abrirRevisionTicket } from "../ticketSheet";
+import { mesCorto, mesNavHtml, pintarMesNav, subnavDinero } from "../dinero";
 
 let root: HTMLElement;
 const ui = {
@@ -36,13 +35,6 @@ const POR_PAGINA = 15;
 const segButtons = (attr: string, entries: Array<[string, string]>, selected: string): string =>
   entries.map(([v, l]) => `<button type="button" data-${attr}="${v}" aria-pressed="${v === selected}">${esc(l)}</button>`).join("");
 
-function bars(totals: Record<string, number>, cur: string): string {
-  const entries = Object.entries(totals).sort((a, b) => b[1] - a[1]);
-  if (!entries.length) return `<div class="empty">Sin datos en ${esc(cur)}.</div>`;
-  const max = entries[0][1] || 1;
-  return entries.map(([k, v]) => `<div class="bar-row"><span>${esc(k)}</span><div class="bar-track"><div class="bar-fill" style="width:${((v / max) * 100).toFixed(1)}%"></div></div><span class="amount">${esc(numberFmt.format(v))}</span></div>`).join("");
-}
-
 export const gastosView: View = {
   id: "gastos",
   label: "Dinero",
@@ -51,79 +43,11 @@ export const gastosView: View = {
   mount(el) {
     root = el;
     el.innerHTML = `
-      <div class="card" id="balanceCard">
-        <div class="card-head">
-          <h2 id="balTitulo">Balance del mes</h2>
-          <label for="gMes" class="inline-label">Mes <input id="gMes" type="month"></label>
-        </div>
-        <div id="balEstado"></div>
-        <div id="balCombinado"></div>
-        <div id="balMonedas" class="stack"></div>
-        <div class="actions">
-          <button class="btn" type="button" id="balCerrar">Cerrar mes</button>
-          <button class="btn ghost" type="button" id="balCompartir">Compartir resumen</button>
-        </div>
-      </div>
-      <div class="card">
-        <div class="card-head">
-          <h2>Análisis del mes</h2>
-          <div class="toggles">
-            <label for="gPrincipal">Análisis en <select id="gPrincipal">${optionsHtml(MONEDAS.map((m) => [m, m]), store.config.monedaPrincipal)}</select></label>
-          </div>
-        </div>
-        <div class="tiles" id="gastoTiles"></div>
-
-        <div class="subcard">
-          <h3>Gasto base (recurrente) y gasto variable</h3>
-          <p class="small muted">Base: lo que se repite cada mes (clases, luz, renta…), aunque el importe cambie. Variable: el resto, donde se ve si estás gastando de más.</p>
-          <div class="tiles" id="natTiles"></div>
-          <div class="split" id="natSplit"><span class="seg-fijo"></span><span class="seg-variable"></span></div>
-          <div class="legend small"><span><span class="dot dot-fijo"></span>Base</span><span><span class="dot dot-variable"></span>Variable</span></div>
-          <div id="natChart"></div>
-          <p class="small muted" id="natNota"></p>
-        </div>
-
-        <div class="grid2">
-          <div class="subcard"><h3>Gasto variable por categoría</h3><p class="small muted">Aquí se ve dónde se va el dinero extra.</p><div class="bars" id="gastoCategorias"></div></div>
-          <div class="subcard">
-            <h3>Por método de pago</h3>
-            <div class="split" id="gastoSplit"><span></span><span></span></div>
-            <div class="legend small" id="gastoSplitLegend"></div>
-            <h3>Por hijo</h3>
-            <div class="bars" id="gastoHijos"></div>
-          </div>
-        </div>
-      </div>
-      <div class="card" id="fijosCard">
-        <div class="card-head"><h2>Gastos fijos</h2><span class="small muted" id="fijosMes"></span></div>
-        <p class="small muted">Tus compromisos de cada mes: clases, colegiatura, renta, niñera… Marca cada pago con «Registrar pago».</p>
-        <ul class="list" id="listaFijos"></ul>
-        <details id="detFijo">
-          <summary id="fijoSummary">Añadir gasto fijo</summary>
-          <form id="formFijo" autocomplete="off">
-            <div class="row">
-              <label for="fNombre">Concepto <input id="fNombre" name="nombre" required maxlength="80" placeholder="Inglés"></label>
-              <label for="fMonto">Importe <input id="fMonto" name="monto" type="number" inputmode="decimal" min="0.01" step="0.01" required></label>
-              <label for="fMoneda">Moneda <select id="fMoneda" name="moneda">${optionsHtml(MONEDAS.map((m) => [m, m]), store.config.monedaPrincipal)}</select></label>
-            </div>
-            <div class="row">
-              <label for="fFrecuencia">Frecuencia <select id="fFrecuencia" name="frecuencia">${optionsHtml(Object.entries(FRECUENCIAS), "mensual")}</select></label>
-              <label for="fDia"><span id="fDiaLabel">Día de pago</span> <select id="fDia" name="diaPago"></select></label>
-              <label for="fMetodo">Se paga con <select id="fMetodo" name="metodo">${optionsHtml(Object.entries(METODOS), "efectivo")}</select></label>
-            </div>
-            <label for="fCategoria">Categoría <select id="fCategoria" name="categoria">${optionsHtml(CATEGORIAS.map((c) => [c, c]), "Educación")}</select></label>
-            <fieldset class="fieldset"><legend>De quién (opcional)</legend><div class="days" id="fHijos"></div></fieldset>
-            <label class="check" for="fActivo"><input type="checkbox" id="fActivo" name="activo" checked> Activo (desmárcalo si se pausa, por ejemplo en vacaciones)</label>
-            <div class="actions">
-              <button class="btn" type="submit" id="fGuardar">Guardar gasto fijo</button>
-              <button class="btn ghost" type="button" id="fCancelar" hidden>Cancelar edición</button>
-            </div>
-          </form>
-        </details>
-      </div>
+      ${subnavDinero("gastos")}
+      <a class="card resumen-mes" href="#balance" id="resumenMes"></a>
 
       <div class="card" id="gastoCard">
-        <details id="detGasto">
+        <details id="detGasto" open>
         <summary class="summary-h2"><span id="gastoTitulo">Registrar gasto</span></summary>
         <div class="ticket-scan">
           <label class="btn ghost" for="gTicket">${ICONS.camara}<span>Escanear ticket</span>
@@ -154,20 +78,48 @@ export const gastosView: View = {
         </details>
       </div>
 
+      <div class="card" id="fijosCard">
+        <div class="card-head"><h2>Gastos fijos</h2><span class="small muted" id="fijosMes"></span></div>
+        <ul class="list" id="listaFijos"></ul>
+        <details id="detFijosResto" hidden>
+          <summary id="fijosRestoSummary"></summary>
+          <ul class="list" id="listaFijosResto"></ul>
+        </details>
+        <details id="detFijo">
+          <summary id="fijoSummary">Añadir gasto fijo</summary>
+          <p class="small muted">Tus compromisos de cada mes: clases, colegiatura, renta, niñera… Marca cada pago con «Registrar pago».</p>
+          <form id="formFijo" autocomplete="off">
+            <div class="row">
+              <label for="fNombre">Concepto <input id="fNombre" name="nombre" required maxlength="80" placeholder="Inglés"></label>
+              <label for="fMonto">Importe <input id="fMonto" name="monto" type="number" inputmode="decimal" min="0.01" step="0.01" required></label>
+              <label for="fMoneda">Moneda <select id="fMoneda" name="moneda">${optionsHtml(MONEDAS.map((m) => [m, m]), store.config.monedaPrincipal)}</select></label>
+            </div>
+            <div class="row">
+              <label for="fFrecuencia">Frecuencia <select id="fFrecuencia" name="frecuencia">${optionsHtml(Object.entries(FRECUENCIAS), "mensual")}</select></label>
+              <label for="fDia"><span id="fDiaLabel">Día de pago</span> <select id="fDia" name="diaPago"></select></label>
+              <label for="fMetodo">Se paga con <select id="fMetodo" name="metodo">${optionsHtml(Object.entries(METODOS), "efectivo")}</select></label>
+            </div>
+            <label for="fCategoria">Categoría <select id="fCategoria" name="categoria">${optionsHtml(CATEGORIAS.map((c) => [c, c]), "Educación")}</select></label>
+            <fieldset class="fieldset"><legend>De quién (opcional)</legend><div class="days" id="fHijos"></div></fieldset>
+            <label class="check" for="fActivo"><input type="checkbox" id="fActivo" name="activo" checked> Activo (desmárcalo si se pausa, por ejemplo en vacaciones)</label>
+            <div class="actions">
+              <button class="btn" type="submit" id="fGuardar">Guardar gasto fijo</button>
+              <button class="btn ghost" type="button" id="fCancelar" hidden>Cancelar edición</button>
+            </div>
+          </form>
+        </details>
+      </div>
+
       <div class="card" id="movCard">
-        <div class="card-head"><h2 id="movTitulo">Movimientos del mes</h2><span class="small muted" id="movTotal"></span></div>
+        <div class="card-head"><h2 id="movTitulo">Movimientos</h2><span class="small muted" id="movTotal"></span></div>
+        ${mesNavHtml("m")}
         <input id="movBuscar" type="search" placeholder="Buscar: fogón, Alain, 300, banca…" aria-label="Buscar movimientos" autocomplete="off">
         <ul class="list" id="listaGastos"></ul>
         <div class="pager" id="movPager"></div>
       </div>
-      <div class="card" id="cortesCard">
-        <h2>Cortes de meses anteriores</h2>
-        <ul class="list" id="listaCortes"></ul>
-      </div>
       `;
 
     qs<HTMLInputElement>("#gFecha", el).value = todayISO();
-    qs<HTMLInputElement>("#gMes", el).value = ui.mes;
     renderDiasPago("mensual", 1);
 
     el.addEventListener("click", (e) => {
@@ -207,14 +159,17 @@ export const gastosView: View = {
     qs<HTMLButtonElement>("#fCancelar", el).addEventListener("click", () => salirEdicionFijo());
     qs<HTMLSelectElement>("#fFrecuencia", el).addEventListener("change", (e) => renderDiasPago((e.target as HTMLSelectElement).value as Frecuencia));
 
-    qs<HTMLInputElement>("#gMes", el).addEventListener("change", (e) => {
+    const irA = (ym: string): void => {
+      ui.mes = ym;
+      ui.pagina = 1;
+      renderMovimientos();
+    };
+    qs<HTMLInputElement>("#mMes", el).addEventListener("change", (e) => {
       const v = (e.target as HTMLInputElement).value;
-      if (v) {
-        ui.mes = v;
-        ui.pagina = 1;
-        this.update();
-      }
+      if (v) irA(v);
     });
+    qs("#mPrev", el).addEventListener("click", () => irA(addMonths(ui.mes, -1)));
+    qs("#mNext", el).addEventListener("click", () => irA(addMonths(ui.mes, 1)));
     qs<HTMLInputElement>("#movBuscar", el).addEventListener("input", (e) => {
       ui.buscar = (e.target as HTMLInputElement).value;
       ui.pagina = 1;
@@ -227,25 +182,6 @@ export const gastosView: View = {
       renderMovimientos();
       qs("#movCard", el).scrollIntoView({ behavior: "smooth", block: "start" });
     });
-    qs<HTMLButtonElement>("#balCerrar", el).addEventListener("click", (e) => {
-      const btn = e.currentTarget as HTMLButtonElement;
-      const yaCerrado = Boolean(store.byId("cortes", ui.mes));
-      if (!confirmTap(btn, yaCerrado ? "¿Actualizar el corte?" : `¿Cerrar ${fmtMonth(ui.mes)}?`)) return;
-      void attempt(() => cerrarMes(ui.mes), yaCerrado ? "Corte actualizado" : `Mes cerrado: ${fmtMonth(ui.mes)}`);
-    });
-    qs<HTMLButtonElement>("#balCompartir", el).addEventListener("click", () => void compartirResumen(ui.mes));
-    el.addEventListener("click", (e) => {
-      const ver = (e.target as HTMLElement).closest<HTMLElement>("[data-ver-mes]");
-      if (!ver?.dataset.verMes) return;
-      ui.mes = ver.dataset.verMes;
-      ui.pagina = 1;
-      qs<HTMLInputElement>("#gMes", el).value = ui.mes;
-      this.update();
-      qs("#balanceCard", el).scrollIntoView({ behavior: "smooth", block: "start" });
-    });
-    qs<HTMLSelectElement>("#gPrincipal", el).addEventListener("change", (e) => {
-      void attempt(() => store.saveConfig({ monedaPrincipal: (e.target as HTMLSelectElement).value as Moneda }));
-    });
   },
 
   update() {
@@ -254,18 +190,36 @@ export const gastosView: View = {
     const current = sel.value;
     sel.innerHTML = optionsHtml(kidOptions(store.data.hijos), current);
     renderHijosFijo();
-    renderBalance();
+    renderResumenMes();
     renderFijos();
-    renderResumen();
-    renderCortes();
+    renderMovimientos();
   },
 };
+
+/* ------------------------------ Resumen del mes (enlace al balance) ------------------------------ */
+
+function renderResumenMes(): void {
+  const ym = monthOf(todayISO());
+  const delMes = gastosDelMes(ym);
+  const totales = MONEDAS.filter((m) => delMes.some((g) => g.moneda === m)).map((m) => fmtMoney(totalEn(delMes, m), m));
+  const pendientes = store.data.fijos.filter((f) => f.activo && !estadoDelMes(f, store.data.gastos, ym, todayISO()).completo).length;
+  qs("#resumenMes", root).innerHTML = `
+    <div class="grow">
+      <div class="small muted">Gastado en ${esc(mesCorto(ym))}</div>
+      <div class="resumen-num">${totales.length ? totales.map(esc).join(" · ") : "Nada todavía"}</div>
+      ${pendientes ? `<div class="small muted">${pendientes} ${pendientes === 1 ? "gasto fijo pendiente" : "gastos fijos pendientes"}</div>` : ""}
+    </div>
+    <span class="resumen-link">Ver balance ›</span>`;
+}
 
 /* ------------------------------ Movimientos (buscar + paginar) ------------------------------ */
 
 /** Sin búsqueda: los del mes elegido. Con búsqueda: en todos los meses, más recientes primero. */
 function renderMovimientos(): void {
   const buscando = ui.buscar.trim().length > 0;
+  pintarMesNav(root, "m", ui.mes);
+  qs<HTMLButtonElement>("#mNext", root).disabled = ui.mes >= monthOf(todayISO());
+  qs("#movCard .mes-nav", root).hidden = buscando;
   const base = buscando
     ? [...store.data.gastos].sort((a, b) => b.fecha.localeCompare(a.fecha) || (b.creado ?? "").localeCompare(a.creado ?? ""))
     : gastosDelMes(ui.mes);
@@ -273,7 +227,7 @@ function renderMovimientos(): void {
   const pag = paginar(resultados, ui.pagina, POR_PAGINA);
   ui.pagina = pag.pagina;
 
-  qs("#movTitulo", root).textContent = buscando ? "Resultados" : "Movimientos del mes";
+  qs("#movTitulo", root).textContent = buscando ? "Resultados" : "Movimientos";
   qs("#movTotal", root).textContent = pag.total ? `${pag.total} ${pag.total === 1 ? "movimiento" : "movimientos"}` : "";
 
   let lastDate: string | null = null;
@@ -283,132 +237,13 @@ function renderMovimientos(): void {
         lastDate = g.fecha;
         return head + gastoItem(g, { fecha: false, editar: true });
       }).join("")
-    : emptyLi(buscando ? "Nada coincide con la búsqueda." : "No hay gastos en este mes.");
+    : emptyLi(buscando ? "Nada coincide con la búsqueda." : `No hay gastos en ${fmtMonth(ui.mes)}.`);
 
   qs("#movPager", root).innerHTML = pag.paginas > 1
     ? `<button class="btn ghost" type="button" data-pagina="${pag.pagina - 1}" ${pag.pagina === 1 ? "disabled" : ""}>‹ Anterior</button>
        <span class="small muted">${pag.desde}–${pag.hasta} de ${pag.total}</span>
        <button class="btn ghost" type="button" data-pagina="${pag.pagina + 1}" ${pag.pagina === pag.paginas ? "disabled" : ""}>Siguiente ›</button>`
     : "";
-}
-
-/* ------------------------------ Balance y cortes ------------------------------ */
-
-const balances = (ym: string): Balance[] =>
-  MONEDAS.map((m) => balanceDelMes({ gastos: store.data.gastos, tareas: store.data.tareas, fijos: store.data.fijos }, ym, m, todayISO()));
-
-const tieneDatos = (b: Balance): boolean => b.movimientos > 0 || b.pendientes.length > 0 || b.anterior > 0;
-const mesCorto = (ym: string): string => fmtMonth(ym).replace(/ de \d{4}$/, "");
-
-function renderBalance(): void {
-  const ym = ui.mes;
-  const corte = store.byId("cortes", ym);
-  const [prev] = mesesHasta(ym, 2);
-  qs("#balTitulo", root).textContent = `Balance de ${mesCorto(ym)}`;
-  qs("#balEstado", root).innerHTML = corte
-    ? `${chip(`Cerrado el ${fmtDate(corte.cerrado.slice(0, 10))}`, "ok")} <span class="small muted">Los números de abajo son los actuales; el corte guarda la foto de ese día.</span>`
-    : ym < monthOf(todayISO()) ? chip("Mes terminado sin cerrar", "warn") : "";
-  qs("#balCerrar", root).textContent = corte ? "Actualizar corte" : "Cerrar mes";
-
-  renderCombinado(ym);
-  const bloques = balances(ym).filter(tieneDatos);
-  qs("#balMonedas", root).innerHTML = bloques.length
-    ? bloques.map((b) => {
-        const variacion = b.variacion === null ? "" : `<span class="${b.variacion > 0 ? "up" : "down"}">${b.variacion > 0 ? "▲" : "▼"} ${Math.abs(b.variacion)}% vs ${esc(mesCorto(prev))}</span>`;
-        return `<div class="subcard">
-          <div class="item-head"><h3>${b.moneda}</h3>${variacion}</div>
-          <div class="bal-total">${esc(numberFmt.format(b.total))} <span class="small muted">${b.moneda} gastados</span></div>
-          <div class="bal-grid">
-            <div><span class="dot dot-fijo"></span>Base <strong>${esc(numberFmt.format(b.base))}</strong></div>
-            <div><span class="dot dot-variable"></span>Variable <strong>${esc(numberFmt.format(b.variable))}</strong></div>
-            <div>Efectivo <strong>${esc(numberFmt.format(b.porMetodo.efectivo ?? 0))}</strong></div>
-            <div>Banca Remota <strong>${esc(numberFmt.format(b.porMetodo.banca_remota ?? 0))}</strong></div>
-          </div>
-          ${b.pendientes.length ? `<h3 class="sub">Falta por pagar · ${esc(numberFmt.format(b.pendiente))} ${b.moneda}</h3>
-            <ul class="list compact">${b.pendientes.map((p) => `<li><div class="grow item-head"><span>${esc(p.titulo)}${p.fecha ? ` <span class="small muted">· ${esc(fmtDate(p.fecha))}</span>` : ""}</span><span class="amount">${p.estimado ? "≈" : ""}${esc(numberFmt.format(p.monto))}</span></div></li>`).join("")}</ul>` : ""}
-          ${b.mayores.length ? `<h3 class="sub">Mayores gastos variables</h3>
-            <ul class="list compact">${b.mayores.map((g) => `<li><div class="grow item-head"><span>${esc(g.descripcion || g.categoria)} <span class="small muted">· ${esc(g.categoria)}</span></span><span class="amount">${esc(numberFmt.format(g.monto))}</span></div></li>`).join("")}</ul>` : ""}
-        </div>`;
-      }).join("")
-    : `<div class="empty">Sin gastos ni pagos pendientes en ${esc(fmtMonth(ym))}.</div>`;
-}
-
-/** Todo el mes sumado en una sola moneda, convirtiendo cada gasto con la tasa de su día. */
-function combinadoDelMes(ym: string): ReturnType<typeof totalCombinado> & { hayAmbas: boolean } {
-  const delMes = store.data.gastos.filter((g) => monthOf(g.fecha) === ym);
-  return { ...totalCombinado(delMes, store.data.tasas), hayAmbas: new Set(delMes.map((g) => g.moneda)).size > 1 };
-}
-
-function renderCombinado(ym: string): void {
-  const box = qs("#balCombinado", root);
-  const c = combinadoDelMes(ym);
-  const tasa = tasaActual(store.data.tasas, todayISO());
-  if (!c.hayAmbas) {
-    box.innerHTML = "";
-    return;
-  }
-  if (!tasa) {
-    box.innerHTML = `<div class="notice small">Tienes gastos en CUP y en USD. Añade la tasa del día en <a href="#ajustes">Ajustes → Tipo de cambio</a> (o conecta elTOQUE) para verlos sumados.</div>`;
-    return;
-  }
-  box.innerHTML = `<div class="combinado">
-      <div><div class="small muted">Todo junto en CUP</div><div class="num">${esc(numberFmt.format(c.cup))}</div></div>
-      <div><div class="small muted">Todo junto en USD</div><div class="num">${esc(numberFmt.format(c.usd))}</div></div>
-    </div>
-    <div class="small muted">Cada gasto convertido con la tasa de su día · hoy 1 USD = ${esc(numberFmt.format(tasa.usd))} CUP (${tasa.fuente === "eltoque" ? "elTOQUE" : "manual"})</div>`;
-}
-
-async function cerrarMes(ym: string): Promise<void> {
-  const [cup, usd] = balances(ym);
-  await store.put("cortes", { id: ym, ym, cerrado: new Date().toISOString(), monedas: { CUP: resumenDe(cup), USD: resumenDe(usd) }, nota: "" });
-}
-
-function renderCortes(): void {
-  const cortes = [...store.data.cortes].sort((a, b) => b.ym.localeCompare(a.ym));
-  qs("#cortesCard", root).hidden = !cortes.length;
-  qs("#listaCortes", root).innerHTML = cortes.map((c, i) => {
-    const anterior = cortes[i + 1];
-    const lineas = MONEDAS.filter((m) => c.monedas[m]?.total || c.monedas[m]?.pendiente).map((m) => {
-      const r = c.monedas[m];
-      const prevTotal = anterior?.monedas[m]?.total;
-      const delta = prevTotal ? Math.round(((r.total - prevTotal) / prevTotal) * 100) : null;
-      return `<div class="small">${m}: <strong>${esc(numberFmt.format(r.total))}</strong> · base ${esc(numberFmt.format(r.base))} · variable ${esc(numberFmt.format(r.variable))}${delta === null ? "" : ` · <span class="${delta > 0 ? "up" : "down"}">${delta > 0 ? "▲" : "▼"} ${Math.abs(delta)}%</span>`}</div>`;
-    }).join("");
-    return `<li><div class="grow">
-      <div class="item-head"><span class="title">${esc(fmtMonth(c.ym))}</span><span class="small muted">cerrado ${esc(fmtDate(c.cerrado.slice(0, 10)))}</span></div>
-      ${lineas || `<div class="small muted">Sin gastos.</div>`}
-      <div class="item-foot"><span class="item-actions"><button class="icon-btn accent" type="button" data-ver-mes="${esc(c.ym)}">Ver</button>${delBtn("cortes", c.id, "Reabrir")}</span></div>
-    </div></li>`;
-  }).join("");
-}
-
-/** Texto del balance para compartir (WhatsApp, notas…). */
-function textoResumen(ym: string): string {
-  const lineas = [`Balance de ${fmtMonth(ym)}`];
-  const comb = combinadoDelMes(ym);
-  if (comb.hayAmbas && store.data.tasas.length) lineas.push(`Todo junto: ${fmtMoney(comb.cup, "CUP")} ≈ ${fmtMoney(comb.usd, "USD")} (tasa de cada día; fuente elTOQUE/manual)`);
-  for (const b of balances(ym).filter(tieneDatos)) {
-    lineas.push("", `${b.moneda}: ${fmtMoney(b.total, b.moneda)} gastados${b.variacion === null ? "" : ` (${b.variacion > 0 ? "+" : ""}${b.variacion}% vs mes anterior)`}`);
-    lineas.push(`• Base: ${numberFmt.format(b.base)} · Variable: ${numberFmt.format(b.variable)}`);
-    lineas.push(`• Efectivo: ${numberFmt.format(b.porMetodo.efectivo ?? 0)} · Banca Remota: ${numberFmt.format(b.porMetodo.banca_remota ?? 0)}`);
-    if (b.categorias.length) lineas.push(`• Por categoría: ${b.categorias.slice(0, 5).map(([c, v]) => `${c} ${numberFmt.format(v)}`).join(", ")}`);
-    if (b.pendientes.length) lineas.push(`• Falta por pagar: ${numberFmt.format(b.pendiente)} (${b.pendientes.map((p) => p.titulo).join(", ")})`);
-  }
-  return lineas.join("\n");
-}
-
-async function compartirResumen(ym: string): Promise<void> {
-  const text = textoResumen(ym);
-  try {
-    if (navigator.share) {
-      await navigator.share({ title: `Balance de ${fmtMonth(ym)}`, text });
-      return;
-    }
-    await navigator.clipboard.writeText(text);
-    toast("Resumen copiado");
-  } catch (e) {
-    if ((e as Error)?.name !== "AbortError") toast("No se pudo compartir. Inténtalo de nuevo.");
-  }
 }
 
 /* ------------------------------ Gasto (crear / editar) ------------------------------ */
@@ -554,28 +389,38 @@ function renderFijos(): void {
   const hoy = todayISO();
   const ym = monthOf(hoy);
   qs("#fijosMes", root).textContent = fmtMonth(ym);
-  const fijos = [...store.data.fijos].sort((a, b) => Number(b.activo) - Number(a.activo) || a.nombre.localeCompare(b.nombre));
-  qs("#listaFijos", root).innerHTML = fijos.length
-    ? fijos.map((f) => {
-        const e = estadoDelMes(f, store.data.gastos, ym, hoy);
-        const estado = !f.activo ? chip("Pausado")
-          : e.completo ? chip(e.esperados > 1 ? `Pagado ${e.pagos}/${e.esperados}` : "Pagado", "ok")
-          : e.vencido ? chip(`Vencido · ${fmtDate(e.proximo as string)}`, "bad")
-          : chip(`${e.pagos ? `${e.pagos}/${e.esperados} · ` : ""}Vence ${fmtDate(e.proximo as string)}`, "warn");
-        const kids = f.hijoIds.map((id) => kidChip(store.byId("hijos", id))).join("");
-        return `<li><div class="grow">
-          <div class="item-head"><span class="title">${esc(f.nombre)}</span><span class="amount">${esc(fmtMoney(f.monto, f.moneda))}</span></div>
-          <div class="chips">${estado}${chip(`${FRECUENCIAS[f.frecuencia]} · ${diaPagoTexto(f)}`)}${chip(f.categoria)}${kids}</div>
-          <div class="item-foot">
-            ${f.activo && !e.completo ? `<button class="icon-btn accent" type="button" data-pagar-fijo="${esc(f.id)}">Registrar pago</button>` : ""}
-            <span class="item-actions">
-              <button class="icon-btn" type="button" data-edit-fijo="${esc(f.id)}">Editar</button>
-              ${delBtn("fijos", f.id)}
-            </span>
-          </div>
-        </div></li>`;
-      }).join("")
-    : emptyLi("Aún no tienes gastos fijos. Añade las clases, la colegiatura o la renta para separarlos de los gastos del día a día.");
+  const fijos = [...store.data.fijos]
+    .map((f) => ({ f, e: estadoDelMes(f, store.data.gastos, ym, hoy) }))
+    .sort((a, b) => Number(b.f.activo) - Number(a.f.activo) || (a.e.proximo ?? "9999").localeCompare(b.e.proximo ?? "9999") || a.f.nombre.localeCompare(b.f.nombre));
+  // Arriba solo lo que falta por pagar este mes; lo pagado y lo pausado, plegado.
+  const pendientes = fijos.filter(({ f, e }) => f.activo && !e.completo);
+  const resto = fijos.filter((x) => !pendientes.includes(x));
+  const item = ({ f, e }: (typeof fijos)[number]): string => {
+    const estado = !f.activo ? chip("Pausado")
+      : e.completo ? chip(e.esperados > 1 ? `Pagado ${e.pagos}/${e.esperados}` : "Pagado", "ok")
+      : e.vencido ? chip(`Vencido · ${fmtDate(e.proximo as string)}`, "bad")
+      : chip(`${e.pagos ? `${e.pagos}/${e.esperados} · ` : ""}Vence ${fmtDate(e.proximo as string)}`, "warn");
+    const kids = f.hijoIds.map((id) => kidChip(store.byId("hijos", id))).join("");
+    return `<li><div class="grow">
+      <div class="item-head"><span class="title">${esc(f.nombre)}</span><span class="amount">${esc(fmtMoney(f.monto, f.moneda))}</span></div>
+      <div class="chips">${estado}${chip(`${FRECUENCIAS[f.frecuencia]} · ${diaPagoTexto(f)}`)}${chip(f.categoria)}${kids}</div>
+      <div class="item-foot">
+        ${f.activo && !e.completo ? `<button class="icon-btn accent" type="button" data-pagar-fijo="${esc(f.id)}">Registrar pago</button>` : ""}
+        <span class="item-actions">
+          <button class="icon-btn" type="button" data-edit-fijo="${esc(f.id)}">Editar</button>
+          ${delBtn("fijos", f.id)}
+        </span>
+      </div>
+    </div></li>`;
+  };
+  qs("#listaFijos", root).innerHTML = !fijos.length
+    ? emptyLi("Aún no tienes gastos fijos. Añade las clases, la colegiatura o la renta para separarlos de los gastos del día a día.")
+    : pendientes.length ? pendientes.map(item).join("")
+    : emptyLi("Todo pagado este mes.");
+  const det = qs<HTMLDetailsElement>("#detFijosResto", root);
+  det.hidden = !resto.length;
+  qs("#fijosRestoSummary", root).textContent = `Pagados y pausados (${resto.length})`;
+  qs("#listaFijosResto", root).innerHTML = resto.map(item).join("");
 }
 
 function editarFijo(f: GastoFijo): void {
@@ -628,55 +473,4 @@ async function guardarFijo(form: HTMLFormElement): Promise<void> {
     salirEdicionFijo();
     qs<HTMLDetailsElement>("#detFijo", root).open = false;
   }
-}
-
-/* ------------------------------ Resumen y gráficos ------------------------------ */
-
-function renderResumen(): void {
-  const cur = store.config.monedaPrincipal;
-  qs<HTMLSelectElement>("#gPrincipal", root).value = cur;
-  const delMes = gastosDelMes(ui.mes);
-  const enBase = delMes.filter((g) => g.moneda === cur);
-  const dias = ui.mes === monthOf(todayISO()) ? new Date().getDate() : daysInMonth(ui.mes);
-
-  qs("#gastoTiles", root).innerHTML = MONEDAS.map((m) => {
-    const t = totalEn(delMes, m);
-    const n = delMes.filter((g) => g.moneda === m).length;
-    return `<div class="tile"><div class="num">${esc(numberFmt.format(t))} <span class="small muted">${m}</span></div><div class="lbl">${esc(numberFmt.format(t / Math.max(dias, 1)))} ${m}/día · ${n} movimientos · ${esc(fmtMonth(ui.mes))}</div></div>`;
-  }).join("");
-
-  // Fijo vs variable
-  const r = resumenDelMes(store.data.gastos, store.data.fijos, ui.mes, cur);
-  qs("#natTiles", root).innerHTML = `
-    <div class="tile"><div class="num">${esc(numberFmt.format(r.fijoPagado))}</div><div class="lbl">Base pagado${r.fijoPrevisto ? ` de ${esc(numberFmt.format(r.fijoPrevisto))} previstos` : ""} (${cur})</div></div>
-    <div class="tile${r.pctVariable >= 50 ? " alert" : ""}"><div class="num">${esc(numberFmt.format(r.variable))}</div><div class="lbl">Variable (${cur}) · ${r.pctVariable}% del gasto</div></div>`;
-  const [sf, sv] = Array.from(qs("#natSplit", root).children) as HTMLElement[];
-  sf.style.width = `${r.total ? 100 - r.pctVariable : 0}%`;
-  sv.style.width = `${r.total ? r.pctVariable : 0}%`;
-  const hist = historico(store.data.gastos, ui.mes, cur, 6);
-  const mesCorto = (ym: string): string => fmtMonth(ym).slice(0, 3);
-  qs("#natChart", root).innerHTML = hist.some((h) => h.fijo || h.variable)
-    ? barrasApiladas(hist.map((h) => ({ label: mesCorto(h.ym), valores: [h.fijo, h.variable] })), ["var(--fijo)", "var(--variable)"], ["Base", "Variable"], hist.length - 1)
-    : `<div class="empty">Cuando registres gastos verás aquí la evolución de los últimos 6 meses.</div>`;
-  const anteriores = hist.slice(0, -1).filter((h) => h.fijo || h.variable);
-  const media = anteriores.length ? anteriores.reduce((s, h) => s + h.variable, 0) / anteriores.length : 0;
-  qs("#natNota", root).textContent = media
-    ? `Tu gasto variable medio de los meses anteriores es ${numberFmt.format(media)} ${cur}; este mes llevas ${numberFmt.format(r.variable)} (${r.variable > media ? "+" : ""}${Math.round(((r.variable - media) / media) * 100)}%).`
-    : "";
-
-  // Variable por categoría, método e hijo
-  const variables = enBase.filter((g) => g.naturaleza !== "fijo");
-  qs("#gastoCategorias", root).innerHTML = bars(sumarPor(variables, (g) => g.categoria), cur);
-  const porMetodo = sumarPor(enBase, (g) => g.metodo);
-  const total = totalEn(enBase, cur);
-  const efectivo = porMetodo.efectivo ?? 0;
-  const banca = porMetodo.banca_remota ?? 0;
-  const [a, b] = Array.from(qs("#gastoSplit", root).children) as HTMLElement[];
-  a.style.width = `${total ? (efectivo / total) * 100 : 0}%`;
-  b.style.width = `${total ? (banca / total) * 100 : 0}%`;
-  qs("#gastoSplitLegend", root).innerHTML = `<span><span class="dot" style="background:var(--accent)"></span>Efectivo ${esc(numberFmt.format(efectivo))}</span><span><span class="dot" style="background:var(--warn)"></span>Banca Remota ${esc(numberFmt.format(banca))}</span>`;
-  const porHijo = sumarPor(enBase.filter((g) => g.hijoId), (g) => store.byId("hijos", g.hijoId)?.nombre ?? "Sin asignar");
-  qs("#gastoHijos", root).innerHTML = Object.keys(porHijo).length ? bars(porHijo, cur) : `<div class="empty">Ningún gasto asignado a un hijo este mes.</div>`;
-
-  renderMovimientos();
 }

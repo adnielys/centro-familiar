@@ -127,6 +127,7 @@ function mergeConfig(saved: Partial<Config> | undefined): Config {
     trabajo: { ...d.trabajo, ...saved?.trabajo },
     cambio: { ...d.cambio, ...saved?.cambio },
     avisos: { ...d.avisos, ...saved?.avisos },
+    presupuesto: { ...d.presupuesto, ...saved?.presupuesto },
   };
 }
 

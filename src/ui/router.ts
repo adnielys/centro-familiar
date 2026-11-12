@@ -11,6 +11,8 @@ export interface View {
   label: string;
   /** Icono de la barra inferior; sin icono, la vista no aparece en la barra. */
   icon?: string;
+  /** Pestaña de la barra que se marca al estar en esta vista (si no tiene icono propio). */
+  tab?: string;
   /** Crea el esqueleto estático (formularios) una sola vez. */
   mount(root: HTMLElement): void;
   /** Repinta las partes dinámicas con el estado actual. */
@@ -51,7 +53,7 @@ export function startRouter(views: readonly View[], opts: RouterOptions): void {
     active = views.find((v) => v.id === id) ?? views[0];
     sections.forEach((s, id2) => (s.hidden = id2 !== active.id));
     document.querySelectorAll<HTMLAnchorElement>("[data-tab]").forEach((a) => {
-      if (a.dataset.tab === active.id) a.setAttribute("aria-current", "page");
+      if (a.dataset.tab === (active.tab ?? active.id)) a.setAttribute("aria-current", "page");
       else a.removeAttribute("aria-current");
     });
     window.scrollTo({ top: 0 });
