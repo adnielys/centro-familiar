@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <title>Centro Familiar</title>
+  <rect width="1024" height="1024" fill="#1F6F78"/>
+  <!-- Contenido dentro del círculo seguro de los iconos adaptables (~80 %) -->
+  <g transform="translate(512 512) scale(0.9) translate(-512 -496)">
+    <!-- Casa -->
+    <path d="M512 170 L850 455 Q868 472 842 472 L770 472 L770 790 Q770 820 740 820 L284 820 Q254 820 254 790 L254 472 L182 472 Q156 472 174 455 Z" fill="#FFFFFF"/>
+    <!-- Corazón en el tejado -->
+    <path d="M512 410 C478 384 462 368 462 346 C462 330 474 318 489 318 C499 318 507 323 512 332 C517 323 525 318 535 318 C550 318 562 330 562 346 C562 368 546 384 512 410 Z" fill="#F2A541"/>
+    <!-- Familia -->
+    <circle cx="512" cy="500" r="46" fill="#1F6F78"/>
+    <path d="M430 740 C430 630 466 572 512 572 C558 572 594 630 594 740 Z" fill="#1F6F78"/>
+    <circle cx="380" cy="590" r="34" fill="#F2A541"/>
+    <path d="M322 760 C322 682 348 640 380 640 C412 640 438 682 438 760 Z" fill="#F2A541"/>
+    <circle cx="644" cy="590" r="34" fill="#F2A541"/>
+    <path d="M586 760 C586 682 612 640 644 640 C676 640 702 682 702 760 Z" fill="#F2A541"/>
+    <!-- Moneda -->
+    <circle cx="790" cy="790" r="104" fill="#F2A541" stroke="#1F6F78" stroke-width="22"/>
+    <path d="M826 742 Q808 722 786 722 Q750 722 750 752 Q750 778 790 788 Q832 798 832 826 Q832 858 792 858 Q766 858 748 836 M790 700 L790 880" fill="none" stroke="#7A4A06" stroke-width="20" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+</svg>
